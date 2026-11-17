@@ -465,16 +465,16 @@ export function buildD7Geometry(radius = 0.95): PolyhedralDieGeometryData {
     faceNormals.push(normSide);
     faceUpTangents.push(tanSide);
     faceCentroids.push(centSide);
-    polygons.push([v0, v1, b1, b0]);
+    polygons.push([b1, b0, v0, v1]);
 
-    // Counter-clockwise outward winding: v0 -> v1 -> b0 and v1 -> b1 -> b0
+    // Counter-clockwise outward winding: b1 -> b0 -> v0 and b1 -> v0 -> v1
     const quadTris = [
-      { v: v0, uv: [0.12, 0.88] },
-      { v: v1, uv: [0.88, 0.88] },
-      { v: b0, uv: [0.12, 0.12] },
-      { v: v1, uv: [0.88, 0.88] },
-      { v: b1, uv: [0.88, 0.12] },
-      { v: b0, uv: [0.12, 0.12] },
+      { v: b1, uv: [0.12, 0.12] },
+      { v: b0, uv: [0.88, 0.12] },
+      { v: v0, uv: [0.88, 0.88] },
+      { v: b1, uv: [0.12, 0.12] },
+      { v: v0, uv: [0.88, 0.88] },
+      { v: v1, uv: [0.12, 0.88] },
     ];
 
     quadTris.forEach((pt) => {

@@ -110,6 +110,7 @@ function buildD7Materials(
       metalness: skin === 'ivory' ? 0.02 : 0.12,
       clearcoat: skin === 'ivory' ? 0.65 : 0.35,
       clearcoatRoughness: 0.18,
+      side: THREE.DoubleSide,
     });
   });
 }
