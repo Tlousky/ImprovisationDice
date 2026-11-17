@@ -15,6 +15,11 @@ export const DIATONIC_MODE_NAMES: DiatonicModeType[] = [
   'Locrian',
 ];
 
+export const PENTATONIC_MODE_NAMES: DiatonicModeType[] = [
+  'Major Pentatonic',
+  'Minor Pentatonic',
+];
+
 export interface ModeChartRow {
   keyName: string;
   tonics: string[]; // 7 notes matching columns: Ionian, Dorian, Phrygian, Lydian, Mixolydian, Aeolian, Locrian
@@ -118,13 +123,81 @@ export function buildDiatonicModeEntry(
     MUSIC_MODES_CHART_ROWS.find((r) => r.keyName === keyName) ??
     MUSIC_MODES_CHART_ROWS[0];
 
+  if (modeType === 'Major Pentatonic') {
+    const tonic = row.tonics[0];
+    const tonicSemitone = row.semitones[0];
+    // Degrees 1, 2, 3, 5, 6 of the Major scale (5 notes)
+    const scalePitches = [
+      row.scaleNotes[0],
+      row.scaleNotes[1],
+      row.scaleNotes[2],
+      row.scaleNotes[4],
+      row.scaleNotes[5],
+    ];
+    const semitones = [
+      row.semitones[0],
+      row.semitones[1],
+      row.semitones[2],
+      row.semitones[4],
+      row.semitones[5],
+    ];
+    return {
+      id: `${row.keyName}-MajorPentatonic`,
+      keyName: row.keyName,
+      modeType,
+      tonic,
+      tonicSemitone,
+      displayName: `${tonic} Major Pentatonic (${row.keyName})`,
+      scalePitches,
+      semitones,
+    };
+  }
+
+  if (modeType === 'Minor Pentatonic') {
+    // Relative minor (Aeolian) tonic & degrees 1, 3, 4, 5, 7 of Aeolian (5 notes)
+    const tonic = row.tonics[5];
+    const tonicSemitone = row.semitones[5];
+    const aeolianNotes = [
+      ...row.scaleNotes.slice(5),
+      ...row.scaleNotes.slice(0, 5),
+    ];
+    const aeolianSemis = [
+      ...row.semitones.slice(5),
+      ...row.semitones.slice(0, 5),
+    ];
+    const scalePitches = [
+      aeolianNotes[0],
+      aeolianNotes[2],
+      aeolianNotes[3],
+      aeolianNotes[4],
+      aeolianNotes[6],
+    ];
+    const semitones = [
+      aeolianSemis[0],
+      aeolianSemis[2],
+      aeolianSemis[3],
+      aeolianSemis[4],
+      aeolianSemis[6],
+    ];
+    return {
+      id: `${row.keyName}-MinorPentatonic`,
+      keyName: row.keyName,
+      modeType,
+      tonic,
+      tonicSemitone,
+      displayName: `${tonic} Minor Pentatonic (${row.keyName})`,
+      scalePitches,
+      semitones,
+    };
+  }
+
   const colIdx = DIATONIC_MODE_NAMES.indexOf(modeType);
   const safeCol = colIdx >= 0 ? colIdx : 0;
 
   const tonic = row.tonics[safeCol];
   const tonicSemitone = row.semitones[safeCol];
 
-  // Rotate scale notes to start on the mode's tonic
+  // Rotate scale notes to start on the mode's tonic (7 notes)
   const rotatedNotes = [
     ...row.scaleNotes.slice(safeCol),
     ...row.scaleNotes.slice(0, safeCol),

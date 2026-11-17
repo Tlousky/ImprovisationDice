@@ -3,6 +3,7 @@ import { Minus, Play, Plus, Repeat, Square, Table2 } from 'lucide-react';
 import {
   CHROMATIC_MODE_SELECTION,
   DIATONIC_MODE_NAMES,
+  PENTATONIC_MODE_NAMES,
   MUSIC_MODES_CHART_ROWS,
   buildDiatonicModeEntry,
 } from '../music/modes';
@@ -168,12 +169,21 @@ export function MelodyResultPanel({
             disabled={isRolling}
             aria-label="Select musical mode"
           >
-            <option value="chromatic">Chromatic (All 12 notes)</option>
-            {DIATONIC_MODE_NAMES.map((type) => (
-              <option key={type} value={type}>
-                {type}
-              </option>
-            ))}
+            <option value="chromatic">Chromatic (All 12 notes · D12)</option>
+            <optgroup label="7-Note Diatonic Modes (D8)">
+              {DIATONIC_MODE_NAMES.map((type) => (
+                <option key={type} value={type}>
+                  {type}
+                </option>
+              ))}
+            </optgroup>
+            <optgroup label="5-Note Pentatonic Scales (D6)">
+              {PENTATONIC_MODE_NAMES.map((type) => (
+                <option key={type} value={type}>
+                  {type}
+                </option>
+              ))}
+            </optgroup>
           </select>
 
           {!melodyMode.isChromatic && (
@@ -209,7 +219,7 @@ export function MelodyResultPanel({
       {!melodyMode.isChromatic && (
         <div className="mode-notes-strip" aria-label="Mode scale notes">
           <span className="mode-notes-badge">
-            D7 · {melodyMode.tonic} {melodyMode.modeType}:
+            {melodyMode.scalePitches.length === 5 ? 'D6' : 'D8'} · {melodyMode.tonic} {melodyMode.modeType}:
           </span>
           <span className="mode-notes-list">
             {melodyMode.scalePitches.join(' · ')}

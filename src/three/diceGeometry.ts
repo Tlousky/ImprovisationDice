@@ -537,3 +537,235 @@ export function buildD7Geometry(radius = 0.95): PolyhedralDieGeometryData {
 
 export const D7_FACE_TO_SCALE_INDEX: number[] = [0, 6, 1, 2, 3, 4, 5];
 export const SCALE_INDEX_TO_D7_FACE: number[] = [0, 2, 3, 4, 5, 6, 1];
+
+/**
+ * Builds an 8-faced regular octahedron (D8) with 8 equilateral triangular faces,
+ * centered equilateral triangle UVs, face normals, upright tangents, and physics hull.
+ */
+export function buildD8Geometry(radius = 0.95): PolyhedralDieGeometryData {
+  const raw = new THREE.OctahedronGeometry(radius, 0);
+  const source = raw.index ? raw.toNonIndexed() : raw;
+  const posAttr = source.getAttribute('position');
+
+  const faceCount = Math.floor(posAttr.count / 3);
+  const positions: number[] = [];
+  const normals: number[] = [];
+  const uvs: number[] = [];
+
+  const faceNormals: THREE.Vector3[] = [];
+  const faceUpTangents: THREE.Vector3[] = [];
+  const faceCentroids: THREE.Vector3[] = [];
+  const polygons: THREE.Vector3[][] = [];
+
+  const geometry = new THREE.BufferGeometry();
+
+  for (let f = 0; f < faceCount; f++) {
+    const i0 = f * 3;
+    let v0 = new THREE.Vector3().fromBufferAttribute(posAttr, i0);
+    let v1 = new THREE.Vector3().fromBufferAttribute(posAttr, i0 + 1);
+    let v2 = new THREE.Vector3().fromBufferAttribute(posAttr, i0 + 2);
+
+    const centroid = new THREE.Vector3()
+      .add(v0)
+      .add(v1)
+      .add(v2)
+      .divideScalar(3);
+
+    let normal = new THREE.Vector3()
+      .subVectors(v1, v0)
+      .cross(new THREE.Vector3().subVectors(v2, v0))
+      .normalize();
+
+    if (normal.dot(centroid) < 0) {
+      normal.negate();
+      [v1, v2] = [v2, v1];
+    }
+
+    // Top vertex v0 is UV (0.5, 0.90), bottom-left v1 is (0.15, 0.30), bottom-right v2 is (0.85, 0.30)
+    const upTangent = v0.clone().sub(centroid).normalize();
+
+    positions.push(v0.x, v0.y, v0.z, v1.x, v1.y, v1.z, v2.x, v2.y, v2.z);
+    normals.push(
+      normal.x,
+      normal.y,
+      normal.z,
+      normal.x,
+      normal.y,
+      normal.z,
+      normal.x,
+      normal.y,
+      normal.z
+    );
+    uvs.push(0.5, 0.9, 0.15, 0.3, 0.85, 0.3);
+
+    geometry.addGroup(f * 3, 3, f);
+    faceNormals.push(normal);
+    faceUpTangents.push(upTangent);
+    faceCentroids.push(centroid);
+    polygons.push([v0, v1, v2]);
+  }
+
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  geometry.computeBoundingSphere();
+
+  source.dispose();
+
+  const inradius = faceCentroids[0].length();
+  const convexShape = buildConvexShape(polygons, faceNormals);
+
+  return {
+    geometry,
+    faceNormals,
+    faceUpTangents,
+    faceCentroids,
+    inradius,
+    convexShape,
+  };
+}
+
+/**
+ * Builds a 6-faced regular hexahedron / cube (D6) with 6 square faces,
+ * centered planar square UVs, face normals, upright tangents, and physics hull.
+ */
+export function buildD6Geometry(size = 1.35): PolyhedralDieGeometryData {
+  const H = size / 2;
+  const geometry = new THREE.BufferGeometry();
+
+  const positions: number[] = [];
+  const normals: number[] = [];
+  const uvs: number[] = [];
+
+  const faceNormals: THREE.Vector3[] = [];
+  const faceUpTangents: THREE.Vector3[] = [];
+  const faceCentroids: THREE.Vector3[] = [];
+  const polygons: THREE.Vector3[][] = [];
+
+  interface D6FaceDef {
+    normal: THREE.Vector3;
+    upTangent: THREE.Vector3;
+    corners: [THREE.Vector3, THREE.Vector3, THREE.Vector3, THREE.Vector3];
+  }
+
+  const faceDefs: D6FaceDef[] = [
+    {
+      // 0: +Y (Top)
+      normal: new THREE.Vector3(0, 1, 0),
+      upTangent: new THREE.Vector3(0, 0, -1),
+      corners: [
+        new THREE.Vector3(-H, H, -H),
+        new THREE.Vector3(-H, H, H),
+        new THREE.Vector3(H, H, H),
+        new THREE.Vector3(H, H, -H),
+      ],
+    },
+    {
+      // 1: -Y (Bottom)
+      normal: new THREE.Vector3(0, -1, 0),
+      upTangent: new THREE.Vector3(0, 0, 1),
+      corners: [
+        new THREE.Vector3(-H, -H, H),
+        new THREE.Vector3(-H, -H, -H),
+        new THREE.Vector3(H, -H, -H),
+        new THREE.Vector3(H, -H, H),
+      ],
+    },
+    {
+      // 2: +Z (Front)
+      normal: new THREE.Vector3(0, 0, 1),
+      upTangent: new THREE.Vector3(0, 1, 0),
+      corners: [
+        new THREE.Vector3(-H, H, H),
+        new THREE.Vector3(-H, -H, H),
+        new THREE.Vector3(H, -H, H),
+        new THREE.Vector3(H, H, H),
+      ],
+    },
+    {
+      // 3: -Z (Back)
+      normal: new THREE.Vector3(0, 0, -1),
+      upTangent: new THREE.Vector3(0, 1, 0),
+      corners: [
+        new THREE.Vector3(H, H, -H),
+        new THREE.Vector3(H, -H, -H),
+        new THREE.Vector3(-H, -H, -H),
+        new THREE.Vector3(-H, H, -H),
+      ],
+    },
+    {
+      // 4: +X (Right)
+      normal: new THREE.Vector3(1, 0, 0),
+      upTangent: new THREE.Vector3(0, 1, 0),
+      corners: [
+        new THREE.Vector3(H, H, H),
+        new THREE.Vector3(H, -H, H),
+        new THREE.Vector3(H, -H, -H),
+        new THREE.Vector3(H, H, -H),
+      ],
+    },
+    {
+      // 5: -X (Left)
+      normal: new THREE.Vector3(-1, 0, 0),
+      upTangent: new THREE.Vector3(0, 1, 0),
+      corners: [
+        new THREE.Vector3(-H, H, -H),
+        new THREE.Vector3(-H, -H, -H),
+        new THREE.Vector3(-H, -H, H),
+        new THREE.Vector3(-H, H, H),
+      ],
+    },
+  ];
+
+  faceDefs.forEach((def, f) => {
+    const [c0, c1, c2, c3] = def.corners;
+    const centroid = def.normal.clone().multiplyScalar(H);
+
+    // Two triangles: (c0, c1, c2) and (c0, c2, c3)
+    const tri1 = [c0, c1, c2];
+    const uvTri1 = [
+      [0, 1],
+      [0, 0],
+      [1, 0],
+    ];
+
+    const tri2 = [c0, c2, c3];
+    const uvTri2 = [
+      [0, 1],
+      [1, 0],
+      [1, 1],
+    ];
+
+    [...tri1, ...tri2].forEach((v) => {
+      positions.push(v.x, v.y, v.z);
+      normals.push(def.normal.x, def.normal.y, def.normal.z);
+    });
+
+    [...uvTri1, ...uvTri2].forEach((uv) => {
+      uvs.push(uv[0], uv[1]);
+    });
+
+    geometry.addGroup(f * 6, 6, f);
+    faceNormals.push(def.normal);
+    faceUpTangents.push(def.upTangent);
+    faceCentroids.push(centroid);
+    polygons.push([c0, c1, c2, c3]);
+  });
+
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  geometry.computeBoundingSphere();
+
+  const inradius = H;
+  const convexShape = buildConvexShape(polygons, faceNormals);
+
+  return {
+    geometry,
+    faceNormals,
+    faceUpTangents,
+    faceCentroids,
+    inradius,
+    convexShape,
+  };
+}

@@ -1,7 +1,9 @@
 import * as CANNON from 'cannon-es';
 import { describe, expect, it } from 'vitest';
 import {
+  buildD6Geometry,
   buildD7Geometry,
+  buildD8Geometry,
   buildD12Geometry,
   buildD20Geometry,
   computeSettleQuaternion,
@@ -9,6 +11,51 @@ import {
 } from './diceGeometry';
 
 describe('Polyhedral Dice Geometry & Physics Hulls', () => {
+  it('builds a D8 with 8 distinct equilateral triangular faces and accurate top-face detection', () => {
+    const d8 = buildD8Geometry(0.95);
+
+    expect(d8.faceNormals).toHaveLength(8);
+    expect(d8.faceUpTangents).toHaveLength(8);
+    expect(d8.geometry.groups).toHaveLength(8);
+    expect(d8.convexShape.faces).toHaveLength(8);
+    // Regular octahedron inradius = radius / sqrt(3)
+    expect(d8.inradius).toBeCloseTo(0.95 / Math.sqrt(3), 4);
+
+    for (let f = 0; f < 8; f++) {
+      const quat = computeSettleQuaternion(
+        d8.faceNormals[f],
+        d8.faceUpTangents[f]
+      );
+      const detected = getTopFaceIndex(d8.faceNormals, quat);
+      expect(detected).toBe(f);
+
+      const rotatedUp = d8.faceUpTangents[f].clone().applyQuaternion(quat);
+      expect(rotatedUp.z).toBeLessThan(-0.99);
+    }
+  });
+
+  it('builds a D6 with 6 distinct square faces and accurate top-face detection', () => {
+    const d6 = buildD6Geometry(1.35);
+
+    expect(d6.faceNormals).toHaveLength(6);
+    expect(d6.faceUpTangents).toHaveLength(6);
+    expect(d6.geometry.groups).toHaveLength(6);
+    expect(d6.convexShape.faces).toHaveLength(6);
+    // Cube inradius = size / 2
+    expect(d6.inradius).toBeCloseTo(1.35 / 2, 4);
+
+    for (let f = 0; f < 6; f++) {
+      const quat = computeSettleQuaternion(
+        d6.faceNormals[f],
+        d6.faceUpTangents[f]
+      );
+      const detected = getTopFaceIndex(d6.faceNormals, quat);
+      expect(detected).toBe(f);
+
+      const rotatedUp = d6.faceUpTangents[f].clone().applyQuaternion(quat);
+      expect(rotatedUp.z).toBeLessThan(-0.99);
+    }
+  });
   it('builds a D12 with 12 distinct pentagonal faces and accurate top-face detection', () => {
     const d12 = buildD12Geometry(0.86);
 

@@ -140,7 +140,7 @@ export function HeaderBar({
         >
           <Music size={15} />
           <span>Melody</span>
-          <small>D12 × 3–9</small>
+          <small>D6 / D8 / D12</small>
         </button>
       </nav>
 

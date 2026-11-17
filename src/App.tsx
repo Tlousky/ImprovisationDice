@@ -184,23 +184,34 @@ export function App() {
     [audio]
   );
 
+  const melodyDieSides: 6 | 8 | 12 = melodyMode.isChromatic
+    ? 12
+    : melodyMode.scalePitches.length === 5
+      ? 6
+      : 8;
+
   const handleMelodyStepLanded = useCallback(
-    (stepIndex: number, d12FaceIndex: number, d7ScaleIndex?: number) => {
+    (stepIndex: number, d12FaceIndex: number, scaleIndex?: number) => {
       let pitch: PitchClass;
       if (
-        d7ScaleIndex !== undefined &&
-        d7ScaleIndex >= 0 &&
+        scaleIndex !== undefined &&
+        scaleIndex >= 0 &&
         !melodyMode.isChromatic
       ) {
+        const isOctaveTonic =
+          (melodyDieSides === 8 && scaleIndex === 7) ||
+          (melodyDieSides === 6 && scaleIndex === 5);
+
         const label =
-          melodyMode.scalePitches[d7ScaleIndex % melodyMode.scalePitches.length];
-        const semitone =
-          melodyMode.semitones[d7ScaleIndex % melodyMode.semitones.length];
-        const match = D12_PITCH_FACES.find((p) => p.semitone === (semitone % 12));
+          melodyMode.scalePitches[scaleIndex % melodyMode.scalePitches.length];
+        const baseSemitone =
+          melodyMode.semitones[scaleIndex % melodyMode.semitones.length];
+        const semitone = isOctaveTonic ? baseSemitone + 12 : baseSemitone;
+        const match = D12_PITCH_FACES.find((p) => p.semitone === (baseSemitone % 12));
         pitch = {
-          id: match?.id ?? label,
+          id: isOctaveTonic ? `${match?.id ?? label}-8va` : match?.id ?? label,
           label,
-          semitone: ((semitone % 12) + 12) % 12,
+          semitone: ((baseSemitone % 12) + 12) % 12,
           midiBase: 60 + semitone,
           needsUnderline: label === 'C' || label === '6' || label === '9',
         };
@@ -273,7 +284,7 @@ export function App() {
   }, [playMelodyPhrase]);
 
   const handleDieTapped = useCallback(
-    async (which: 'd12' | 'd20' | 'd7') => {
+    async (which: 'd12' | 'd20' | 'd8' | 'd6' | 'd7') => {
       if (isRolling) return;
       await audio.unlockAudio();
 
@@ -476,7 +487,7 @@ export function App() {
             skin={skin}
             trayTheme={trayTheme}
             allowedMelodyFaces={allowedMelodyFaces}
-            melodyDieSides={melodyMode.isChromatic ? 12 : 7}
+            melodyDieSides={melodyDieSides}
             activeMelodyScale={melodyMode.isChromatic ? undefined : melodyMode.scalePitches}
             onChordLanded={handleChordLanded}
             onMelodyStepLanded={handleMelodyStepLanded}
@@ -499,7 +510,7 @@ export function App() {
           noteCount={noteCount}
           isRolling={isRolling}
           melodyProgressIndex={melodyProgressIndex}
-          melodyDieSides={melodyMode.isChromatic ? 12 : 7}
+          melodyDieSides={melodyDieSides}
           onRoll={handleRoll}
           onFinishMelodyEarly={() => stageRef.current?.finishMelodyEarly()}
         />

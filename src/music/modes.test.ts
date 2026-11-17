@@ -72,4 +72,18 @@ describe('Music Modes Chart & Theory', () => {
     expect(dDorianIndices).toHaveLength(7);
     expect(dDorianIndices).toEqual([0, 2, 4, 5, 7, 9, 11]);
   });
+
+  it('builds 5-note pentatonic scale entries accurately', () => {
+    // C Major Pentatonic: C, D, E, G, A
+    const cMajPent = buildDiatonicModeEntry('C Major', 'Major Pentatonic');
+    expect(cMajPent.tonic).toBe('C');
+    expect(cMajPent.scalePitches).toEqual(['C', 'D', 'E', 'G', 'A']);
+    expect(cMajPent.semitones).toEqual([0, 2, 4, 7, 9]);
+
+    // A Minor Pentatonic: A, C, D, E, G
+    const aMinPent = buildDiatonicModeEntry('C Major', 'Minor Pentatonic');
+    expect(aMinPent.tonic).toBe('A');
+    expect(aMinPent.scalePitches).toEqual(['A', 'C', 'D', 'E', 'G']);
+    expect(aMinPent.semitones).toEqual([9, 0, 2, 4, 7]);
+  });
 });

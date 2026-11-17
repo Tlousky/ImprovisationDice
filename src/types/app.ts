@@ -57,7 +57,9 @@ export type DiatonicModeType =
   | 'Lydian'
   | 'Mixolydian'
   | 'Aeolian'
-  | 'Locrian';
+  | 'Locrian'
+  | 'Major Pentatonic'
+  | 'Minor Pentatonic';
 
 export interface DiatonicModeEntry {
   id: string; // e.g. "C-Dorian"
