@@ -456,7 +456,13 @@ export function App() {
             onStopMelody={stopPlayback}
             onTapStep={(step) => {
               if (step.midiNote !== null) {
+                setActivePlaybackIndex(step.stepIndex);
                 audio.playNote(step.midiNote, '4n');
+                window.setTimeout(() => {
+                  setActivePlaybackIndex((curr) =>
+                    curr === step.stepIndex ? null : curr
+                  );
+                }, 450);
               }
             }}
             onKeyPress={(midi) => audio.playNote(midi, '4n')}

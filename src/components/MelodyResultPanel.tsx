@@ -54,23 +54,15 @@ export function MelodyResultPanel({
   );
   const canPlay = landedSteps.length > 0 && !isRolling;
 
-  let activeKeyboardMidis: number[] = [];
-  let activeRootSemitone: number | null = null;
+  const rolledSteps = landedSteps.map((s) => ({
+    stepIndex: s.stepIndex,
+    midiNote: s.midiNote,
+    noteLabel: s.noteLabel,
+  }));
 
-  if (
-    activePlaybackIndex !== null &&
-    steps[activePlaybackIndex]?.midiNote !== null &&
-    steps[activePlaybackIndex]?.pitch
-  ) {
-    activeKeyboardMidis = [steps[activePlaybackIndex].midiNote!];
-    activeRootSemitone = steps[activePlaybackIndex].pitch!.semitone;
-  } else if (landedSteps.length > 0) {
-    const latest = landedSteps[landedSteps.length - 1];
-    if (latest.midiNote !== null && latest.pitch) {
-      activeKeyboardMidis = [latest.midiNote];
-      activeRootSemitone = latest.pitch.semitone;
-    }
-  }
+  const modeTonicSemitone = melodyMode.isChromatic
+    ? null
+    : melodyMode.tonicSemitone;
 
   const handleModeTypeSelect = (selected: string) => {
     if (selected === 'chromatic') {
@@ -251,11 +243,13 @@ export function MelodyResultPanel({
         })}
       </div>
 
-      {/* Mini Piano with Mode Key Dots */}
+      {/* Mini Piano with Mode Scale Notes, Step Numbers & Accidental Spellings */}
       <PianoKeyboardMini
-        highlightedMidis={activeKeyboardMidis}
-        rootSemitone={activeRootSemitone}
+        rolledSteps={rolledSteps}
+        activePlaybackIndex={activePlaybackIndex}
+        rootSemitone={modeTonicSemitone}
         modeSemitones={melodyMode.isChromatic ? undefined : melodyMode.semitones}
+        scalePitches={melodyMode.isChromatic ? undefined : melodyMode.scalePitches}
         onKeyPress={onKeyPress}
       />
 
