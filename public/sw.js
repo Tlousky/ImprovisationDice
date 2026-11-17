@@ -1,11 +1,11 @@
-const APP_CACHE = 'chord-dice-app-v1';
+const APP_CACHE = 'chord-dice-app-v2';
 const AUDIO_CACHE = 'chord-dice-salamander-v1';
 
 const APP_SHELL = [
-  '/',
-  '/index.html',
-  '/manifest.webmanifest',
-  '/icon.svg',
+  './',
+  './index.html',
+  './manifest.webmanifest',
+  './icon.svg',
 ];
 
 self.addEventListener('install', (event) => {

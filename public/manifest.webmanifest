@@ -2,8 +2,8 @@
   "name": "Composer's Chord Dice",
   "short_name": "Chord Dice",
   "description": "3D musical improvisation dice (D12 Pitch + D20 Chord) with grand piano audio & MIDI output.",
-  "start_url": "/",
-  "scope": "/",
+  "start_url": "./",
+  "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#120b1d",
@@ -11,7 +11,7 @@
   "categories": ["music", "utilities", "education"],
   "icons": [
     {
-      "src": "/icon.svg",
+      "src": "./icon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any maskable"
