@@ -595,6 +595,87 @@ button:disabled {
   gap: 8px;
 }
 
+.melody-mode-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.mode-select-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+
+.mode-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.mode-select {
+  padding: 4px 6px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  border-radius: 8px;
+  background: rgba(14, 7, 23, 0.92);
+  color: var(--ivory);
+  border: 1px solid rgba(212, 175, 55, 0.32);
+  outline: none;
+}
+
+.mode-select--key {
+  max-width: 95px;
+}
+
+.chart-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 9px;
+  border-radius: 8px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: rgba(212, 175, 55, 0.16);
+  border: 1px solid rgba(212, 175, 55, 0.38);
+  color: var(--brass-light);
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.chart-toggle-btn.is-custom-mode {
+  background: rgba(212, 175, 55, 0.28);
+  border-color: var(--brass-mid);
+  box-shadow: 0 0 10px rgba(212, 175, 55, 0.22);
+}
+
+.mode-notes-strip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.68rem;
+  color: var(--brass-light);
+  background: rgba(212, 175, 55, 0.1);
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(212, 175, 55, 0.22);
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.mode-notes-badge {
+  font-weight: 700;
+  color: var(--ivory);
+}
+
+.mode-notes-list {
+  letter-spacing: 0.04em;
+  opacity: 0.9;
+}
+
 .stepper-group {
   display: flex;
   align-items: center;
@@ -763,6 +844,176 @@ button:disabled {
 
 .piano-key--black.is-root {
   background: linear-gradient(180deg, #f2d374 0%, #b88a1e 100%);
+}
+
+/* Piano Mode Indicator Dot */
+.piano-mode-dot {
+  position: absolute;
+  bottom: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--brass-mid);
+  box-shadow: 0 0 4px rgba(212, 175, 55, 0.75);
+  pointer-events: none;
+}
+
+.piano-key--black .piano-mode-dot {
+  bottom: 6px;
+  background: var(--brass-light);
+}
+
+/* Music Modes Chart Modal */
+.modes-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(10, 4, 18, 0.82);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+}
+
+.modes-modal-sheet {
+  width: 100%;
+  max-width: 440px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  background: rgba(23, 11, 38, 0.98);
+  border: 1px solid rgba(212, 175, 55, 0.42);
+  border-radius: 18px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.85);
+  overflow: hidden;
+}
+
+.modes-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 12px 14px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  gap: 8px;
+}
+
+.modes-modal-title {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--brass-light);
+}
+
+.modes-modal-sub {
+  margin: 2px 0 0;
+  font-size: 0.68rem;
+  color: var(--text-muted);
+}
+
+.modes-modal-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.modes-chromatic-btn {
+  padding: 5px 9px;
+  border-radius: 8px;
+  font-size: 0.69rem;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: var(--ivory);
+  transition: all 0.15s ease;
+}
+
+.modes-chromatic-btn.is-active {
+  background: rgba(212, 175, 55, 0.28);
+  border-color: var(--brass-mid);
+  color: var(--brass-light);
+}
+
+.modes-table-scroll {
+  flex: 1;
+  overflow: auto;
+  padding: 4px;
+}
+
+.modes-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.68rem;
+  text-align: center;
+}
+
+.modes-table th {
+  position: sticky;
+  top: 0;
+  background: #170b26;
+  padding: 6px 3px;
+  font-weight: 700;
+  color: var(--text-muted);
+  border-bottom: 1px solid rgba(212, 175, 55, 0.3);
+  z-index: 2;
+  white-space: nowrap;
+}
+
+.modes-table .th-key {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  background: #170b26;
+  text-align: left;
+  padding-left: 8px;
+}
+
+.modes-table td {
+  padding: 2px 1px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.modes-table .td-key {
+  position: sticky;
+  left: 0;
+  background: #1a0d2c;
+  font-weight: 700;
+  color: var(--ivory);
+  text-align: left;
+  padding: 4px 8px;
+  white-space: nowrap;
+  z-index: 1;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.mode-cell-btn {
+  width: 100%;
+  min-width: 34px;
+  padding: 6px 2px;
+  border-radius: 6px;
+  font-family: var(--font-serif);
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid transparent;
+  transition: all 0.12s ease;
+}
+
+.mode-cell-btn:hover {
+  background: rgba(212, 175, 55, 0.18);
+  border-color: rgba(212, 175, 55, 0.45);
+}
+
+.mode-cell-btn.is-active {
+  background: linear-gradient(135deg, rgba(212, 175, 55, 0.4), rgba(116, 46, 194, 0.5));
+  border-color: var(--brass-mid);
+  color: var(--brass-light);
+  box-shadow: 0 0 8px rgba(212, 175, 55, 0.35);
 }
 
 /* 3D Dice Tray Stage */

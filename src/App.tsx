@@ -1,10 +1,14 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Trash2, X } from 'lucide-react';
 import { useAudioEngine } from './audio/useAudioEngine';
 import { ChordResultPanel } from './components/ChordResultPanel';
 import { HeaderBar } from './components/HeaderBar';
 import { MelodyResultPanel } from './components/MelodyResultPanel';
 import { RollButtonBar } from './components/RollButtonBar';
+import {
+  CHROMATIC_MODE_SELECTION,
+  getAllowedD12FaceIndices,
+} from './music/modes';
 import {
   D12_PITCH_FACES,
   buildChordResult,
@@ -17,6 +21,7 @@ import type {
   ChordRollResult,
   DiceSkin,
   HistoryEntry,
+  MelodyModeSelection,
   MelodyNoteStep,
   TrayTheme,
 } from './types/app';
@@ -40,8 +45,16 @@ export function App() {
   const [chordResult, setChordResult] = useState<ChordRollResult | null>(null);
 
   const [noteCount, setNoteCount] = useState(5);
+  const [melodyMode, setMelodyMode] = useState<MelodyModeSelection>(
+    CHROMATIC_MODE_SELECTION
+  );
   const [melodySteps, setMelodySteps] = useState<MelodyNoteStep[]>(() =>
     createPendingSteps(5)
+  );
+
+  const allowedMelodyFaces = useMemo(
+    () => getAllowedD12FaceIndices(melodyMode),
+    [melodyMode]
   );
   const [melodyProgressIndex, setMelodyProgressIndex] = useState(0);
   const [isPlayingBack, setIsPlayingBack] = useState(false);
@@ -135,9 +148,9 @@ export function App() {
       melodyStepsRef.current = fresh;
       setMelodySteps(fresh);
       setMelodyProgressIndex(0);
-      stageRef.current?.rollMelody(noteCount);
+      stageRef.current?.rollMelody(noteCount, allowedMelodyFaces);
     }
-  }, [audio, isRolling, mode, noteCount, stopPlayback]);
+  }, [allowedMelodyFaces, audio, isRolling, mode, noteCount, stopPlayback]);
 
   // Keyboard spacebar shortcut for quick rolling on desktop
   useEffect(() => {
@@ -405,6 +418,8 @@ export function App() {
           <MelodyResultPanel
             noteCount={noteCount}
             onChangeNoteCount={handleChangeNoteCount}
+            melodyMode={melodyMode}
+            onChangeMelodyMode={setMelodyMode}
             steps={melodySteps}
             isRolling={isRolling}
             isPlayingBack={isPlayingBack}
@@ -433,6 +448,7 @@ export function App() {
             mode={mode}
             skin={skin}
             trayTheme={trayTheme}
+            allowedMelodyFaces={allowedMelodyFaces}
             onChordLanded={handleChordLanded}
             onMelodyStepLanded={handleMelodyStepLanded}
             onMelodySequenceComplete={handleMelodySequenceComplete}

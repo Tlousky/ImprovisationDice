@@ -19,7 +19,7 @@ import { getDieFaceTexture, getTrayVelvetTexture } from './diceTextures';
 
 export interface DiceStageHandle {
   rollChord: () => void;
-  rollMelody: (count: number) => void;
+  rollMelody: (count: number, allowedFaces?: number[]) => void;
   finishMelodyEarly: () => void;
 }
 
@@ -27,6 +27,7 @@ interface DiceStageProps {
   mode: AppMode;
   skin: DiceSkin;
   trayTheme: TrayTheme;
+  allowedMelodyFaces?: number[];
   onChordLanded: (d12FaceIndex: number, d20FaceIndex: number) => void;
   onMelodyStepLanded: (stepIndex: number, d12FaceIndex: number) => void;
   onMelodySequenceComplete: () => void;
@@ -93,6 +94,7 @@ export const DiceStage = forwardRef<DiceStageHandle, DiceStageProps>(
       mode,
       skin,
       trayTheme,
+      allowedMelodyFaces,
       onChordLanded,
       onMelodyStepLanded,
       onMelodySequenceComplete,
@@ -103,6 +105,9 @@ export const DiceStage = forwardRef<DiceStageHandle, DiceStageProps>(
     ref
   ) {
     const containerRef = useRef<HTMLDivElement | null>(null);
+
+    const allowedMelodyFacesRef = useRef(allowedMelodyFaces);
+    allowedMelodyFacesRef.current = allowedMelodyFaces;
 
     const callbacksRef = useRef({
       onChordLanded,
@@ -134,13 +139,14 @@ export const DiceStage = forwardRef<DiceStageHandle, DiceStageProps>(
       d20Data?: PolyhedralDieGeometryData;
       world?: CANNON.World;
       rollChord?: () => void;
-      rollMelody?: (count: number) => void;
+      rollMelody?: (count: number, allowedFaces?: number[]) => void;
       finishMelodyEarly?: () => void;
     }>({});
 
     useImperativeHandle(ref, () => ({
       rollChord: () => sceneRefs.current.rollChord?.(),
-      rollMelody: (count: number) => sceneRefs.current.rollMelody?.(count),
+      rollMelody: (count: number, allowedFaces?: number[]) =>
+        sceneRefs.current.rollMelody?.(count, allowedFaces ?? allowedMelodyFacesRef.current),
       finishMelodyEarly: () => sceneRefs.current.finishMelodyEarly?.(),
     }));
 
@@ -483,6 +489,7 @@ export const DiceStage = forwardRef<DiceStageHandle, DiceStageProps>(
             calmFrames: number;
             stepIndex: number;
             totalSteps: number;
+            allowedFaces?: number[];
           }
         | {
             kind: 'melody-settle';
@@ -495,6 +502,7 @@ export const DiceStage = forwardRef<DiceStageHandle, DiceStageProps>(
             face12: number;
             stepIndex: number;
             totalSteps: number;
+            allowedFaces?: number[];
             pauseAfter: number;
           };
 
@@ -524,7 +532,11 @@ export const DiceStage = forwardRef<DiceStageHandle, DiceStageProps>(
         );
       };
 
-      const startSingleMelodyThrow = (stepIndex: number, totalSteps: number) => {
+      const startSingleMelodyThrow = (
+        stepIndex: number,
+        totalSteps: number,
+        allowedFaces?: number[]
+      ) => {
         d12Mesh.scale.setScalar(MELODY_D12_SCALE);
         launchBody(
           d12Body,
@@ -541,6 +553,7 @@ export const DiceStage = forwardRef<DiceStageHandle, DiceStageProps>(
           calmFrames: 0,
           stepIndex,
           totalSteps,
+          allowedFaces,
         };
       };
 
@@ -575,7 +588,7 @@ export const DiceStage = forwardRef<DiceStageHandle, DiceStageProps>(
         rollState = { kind: 'chord-physics', elapsed: 0, calmFrames: 0 };
       };
 
-      const triggerMelodyRoll = (count: number) => {
+      const triggerMelodyRoll = (count: number, allowedFaces?: number[]) => {
         if (rollState.kind !== 'idle') return;
         const clampedCount = Math.max(3, Math.min(9, Math.round(count)));
         finishMelodyRequested = false;
@@ -584,7 +597,8 @@ export const DiceStage = forwardRef<DiceStageHandle, DiceStageProps>(
           world.removeBody(d20Body);
         }
         callbacksRef.current.onRollingChange?.(true);
-        startSingleMelodyThrow(0, clampedCount);
+        const facesToUse = allowedFaces ?? allowedMelodyFacesRef.current;
+        startSingleMelodyThrow(0, clampedCount, facesToUse);
       };
 
       const finishMelodyEarly = () => {
@@ -808,16 +822,27 @@ export const DiceStage = forwardRef<DiceStageHandle, DiceStageProps>(
             rollState.calmFrames >= 6 ||
             rollState.elapsed >= 0.92
           ) {
+            const allowed =
+              rollState.allowedFaces && rollState.allowedFaces.length > 0
+                ? rollState.allowedFaces
+                : undefined;
+
             if (finishMelodyRequested) {
               // Immediately resolve remaining steps and snap final die
               const { stepIndex, totalSteps } = rollState;
               let lastFace = getTopFaceIndex(
                 d12Data.faceNormals,
-                d12Mesh.quaternion
+                d12Mesh.quaternion,
+                allowed
               );
               callbacksRef.current.onMelodyStepLanded(stepIndex, lastFace);
               for (let s = stepIndex + 1; s < totalSteps; s++) {
-                lastFace = Math.floor(Math.random() * D12_PITCH_FACES.length);
+                if (allowed && allowed.length > 0) {
+                  const randIdx = Math.floor(Math.random() * allowed.length);
+                  lastFace = allowed[randIdx];
+                } else {
+                  lastFace = Math.floor(Math.random() * D12_PITCH_FACES.length);
+                }
                 callbacksRef.current.onMelodyStepLanded(s, lastFace);
               }
               const finalQ = computeSettleQuaternion(
@@ -835,7 +860,8 @@ export const DiceStage = forwardRef<DiceStageHandle, DiceStageProps>(
             } else {
               const face12 = getTopFaceIndex(
                 d12Data.faceNormals,
-                d12Mesh.quaternion
+                d12Mesh.quaternion,
+                allowed
               );
               const endPos = new THREE.Vector3(
                 THREE.MathUtils.clamp(d12Mesh.position.x, -1.1, 1.1),
@@ -857,6 +883,7 @@ export const DiceStage = forwardRef<DiceStageHandle, DiceStageProps>(
                 face12,
                 stepIndex: rollState.stepIndex,
                 totalSteps: rollState.totalSteps,
+                allowedFaces: rollState.allowedFaces,
                 pauseAfter: 0,
               };
             }
@@ -887,10 +914,15 @@ export const DiceStage = forwardRef<DiceStageHandle, DiceStageProps>(
             rollState.pauseAfter += dt;
             if (finishMelodyRequested || rollState.pauseAfter >= 0.2) {
               if (finishMelodyRequested) {
-                const { stepIndex, totalSteps } = rollState;
+                const { stepIndex, totalSteps, allowedFaces } = rollState;
                 let lastFace = rollState.face12;
                 for (let s = stepIndex + 1; s < totalSteps; s++) {
-                  lastFace = Math.floor(Math.random() * D12_PITCH_FACES.length);
+                  if (allowedFaces && allowedFaces.length > 0) {
+                    const randIdx = Math.floor(Math.random() * allowedFaces.length);
+                    lastFace = allowedFaces[randIdx];
+                  } else {
+                    lastFace = Math.floor(Math.random() * D12_PITCH_FACES.length);
+                  }
                   callbacksRef.current.onMelodyStepLanded(s, lastFace);
                 }
                 const finalQ = computeSettleQuaternion(
@@ -905,7 +937,8 @@ export const DiceStage = forwardRef<DiceStageHandle, DiceStageProps>(
               } else {
                 startSingleMelodyThrow(
                   rollState.stepIndex + 1,
-                  rollState.totalSteps
+                  rollState.totalSteps,
+                  rollState.allowedFaces
                 );
               }
             }

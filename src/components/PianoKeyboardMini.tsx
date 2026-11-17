@@ -3,6 +3,7 @@ import { midiToDisplayNote } from '../music/theory';
 interface PianoKeyboardMiniProps {
   highlightedMidis?: number[];
   rootSemitone?: number | null;
+  modeSemitones?: number[];
   onKeyPress?: (midi: number) => void;
 }
 
@@ -49,11 +50,17 @@ function normalizeIntoDisplayRange(midi: number): number {
 export function PianoKeyboardMini({
   highlightedMidis = [],
   rootSemitone = null,
+  modeSemitones,
   onKeyPress,
 }: PianoKeyboardMiniProps) {
   const normalizedActive = new Set(
     highlightedMidis.map(normalizeIntoDisplayRange)
   );
+
+  const modeSet =
+    modeSemitones && modeSemitones.length < 12
+      ? new Set(modeSemitones)
+      : null;
 
   return (
     <div className="piano-mini" role="group" aria-label="Piano keyboard visualizer">
@@ -62,16 +69,18 @@ export function PianoKeyboardMini({
           const isActive = normalizedActive.has(key.midi);
           const isRoot =
             isActive && rootSemitone !== null && key.semitone === rootSemitone;
+          const isInMode = modeSet !== null && modeSet.has(key.semitone);
           return (
             <button
               key={key.midi}
               type="button"
               className={`piano-key piano-key--white ${
                 isActive ? 'is-active' : ''
-              } ${isRoot ? 'is-root' : ''}`}
+              } ${isRoot ? 'is-root' : ''} ${isInMode ? 'in-mode' : ''}`}
               onClick={() => onKeyPress?.(key.midi)}
               aria-label={`Play ${midiToDisplayNote(key.midi)}`}
             >
+              {isInMode && <span className="piano-mode-dot" aria-hidden="true" />}
               {key.semitone === 0 && (
                 <span className="piano-c-label">
                   C{Math.floor(key.midi / 12) - 1}
@@ -87,6 +96,7 @@ export function PianoKeyboardMini({
           const isActive = normalizedActive.has(key.midi);
           const isRoot =
             isActive && rootSemitone !== null && key.semitone === rootSemitone;
+          const isInMode = modeSet !== null && modeSet.has(key.semitone);
           const leftPercent = ((key.whiteIndex + 0.68) / TOTAL_WHITE) * 100;
           const widthPercent = (0.62 / TOTAL_WHITE) * 100;
 
@@ -100,10 +110,12 @@ export function PianoKeyboardMini({
               }}
               className={`piano-key piano-key--black ${
                 isActive ? 'is-active' : ''
-              } ${isRoot ? 'is-root' : ''}`}
+              } ${isRoot ? 'is-root' : ''} ${isInMode ? 'in-mode' : ''}`}
               onClick={() => onKeyPress?.(key.midi)}
               aria-label={`Play ${midiToDisplayNote(key.midi)}`}
-            />
+            >
+              {isInMode && <span className="piano-mode-dot" aria-hidden="true" />}
+            </button>
           );
         })}
       </div>

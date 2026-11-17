@@ -297,16 +297,24 @@ export function buildD12Geometry(radius = 0.86): PolyhedralDieGeometryData {
 
 /**
  * Returns the index of the face whose world-space normal points highest (+Y).
+ * If allowedFaceIndices is provided, selects the best candidate among allowed faces.
  */
 export function getTopFaceIndex(
   faceNormals: THREE.Vector3[],
-  worldQuaternion: THREE.Quaternion
+  worldQuaternion: THREE.Quaternion,
+  allowedFaceIndices?: number[]
 ): number {
-  let bestIdx = 0;
+  const candidates =
+    allowedFaceIndices && allowedFaceIndices.length > 0
+      ? allowedFaceIndices
+      : Array.from({ length: faceNormals.length }, (_, i) => i);
+
+  let bestIdx = candidates[0];
   let bestDot = -Infinity;
   const transformed = new THREE.Vector3();
 
-  for (let i = 0; i < faceNormals.length; i++) {
+  for (const i of candidates) {
+    if (i < 0 || i >= faceNormals.length) continue;
     transformed.copy(faceNormals[i]).applyQuaternion(worldQuaternion);
     const dot = transformed.dot(WORLD_UP);
     if (dot > bestDot) {

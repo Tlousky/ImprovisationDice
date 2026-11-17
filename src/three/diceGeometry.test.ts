@@ -28,6 +28,14 @@ describe('Polyhedral Dice Geometry & Physics Hulls', () => {
       const rotatedUp = d12.faceUpTangents[f].clone().applyQuaternion(quat);
       expect(rotatedUp.z).toBeLessThan(-0.99);
     }
+
+    // Filtered selection: if face 3 is top, but allowed is [0, 2, 4], it should pick among allowed
+    const quat3 = computeSettleQuaternion(
+      d12.faceNormals[3],
+      d12.faceUpTangents[3]
+    );
+    const filtered = getTopFaceIndex(d12.faceNormals, quat3, [0, 2, 4]);
+    expect([0, 2, 4]).toContain(filtered);
   });
 
   it('builds a D20 with 20 distinct triangular faces and accurate top-face detection', () => {
