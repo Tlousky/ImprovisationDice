@@ -144,8 +144,8 @@ function buildD7Materials(
 
   for (let k = 0; k < 5; k++) {
     const next = (k + 1) % 5;
-    const leftLabel = ridgeLabels[k];
-    const rightLabel = ridgeLabels[next];
+    const leftLabel = ridgeLabels[next]; // near u=0 (Ridge next)
+    const rightLabel = ridgeLabels[k];   // near u=1 (Ridge k)
     sideMats.push(
       new THREE.MeshPhysicalMaterial({
         ...baseProps,
@@ -153,8 +153,10 @@ function buildD7Materials(
           leftLabel,
           rightLabel,
           skin,
-          needsUnderlineLeft: leftLabel === '6' || leftLabel === '9' || leftLabel === 'C',
-          needsUnderlineRight: rightLabel === '6' || rightLabel === '9' || rightLabel === 'C',
+          needsUnderlineLeft:
+            leftLabel === '6' || leftLabel === '9' || leftLabel === 'C',
+          needsUnderlineRight:
+            rightLabel === '6' || rightLabel === '9' || rightLabel === 'C',
         }),
       })
     );

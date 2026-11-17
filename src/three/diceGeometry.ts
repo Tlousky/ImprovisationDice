@@ -467,16 +467,18 @@ export function buildD7Geometry(radius = 0.95): PolyhedralDieGeometryData {
 
     polygons.push([b1, b0, v0, v1]);
 
-    // Counter-clockwise outward winding with full UV mapping
-    // u=0 is along Ridge k, u=1 is along Ridge k+1
-    // v=0 is at bottom (-H_half), v=1 is at top (+H_half)
+    // Counter-clockwise outward winding with un-mirrored UV mapping:
+    // b1 -> (0, 0) [Screen Left, Bottom]
+    // b0 -> (1, 0) [Screen Right, Bottom]
+    // v0 -> (1, 1) [Screen Right, Top]
+    // v1 -> (0, 1) [Screen Left, Top]
     const quadTris = [
-      { v: b1, uv: [1, 0] },
-      { v: b0, uv: [0, 0] },
-      { v: v0, uv: [0, 1] },
-      { v: b1, uv: [1, 0] },
-      { v: v0, uv: [0, 1] },
-      { v: v1, uv: [1, 1] },
+      { v: b1, uv: [0, 0] },
+      { v: b0, uv: [1, 0] },
+      { v: v0, uv: [1, 1] },
+      { v: b1, uv: [0, 0] },
+      { v: v0, uv: [1, 1] },
+      { v: v1, uv: [0, 1] },
     ];
 
     quadTris.forEach((pt) => {
