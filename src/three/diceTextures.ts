@@ -246,3 +246,133 @@ export function getTrayVelvetTexture(theme: TrayTheme): THREE.CanvasTexture {
   VELVET_TEXTURE_CACHE.set(theme, texture);
   return texture;
 }
+
+export interface D7SideTextureOptions {
+  leftLabel: string;
+  rightLabel: string;
+  skin: DiceSkin;
+  needsUnderlineLeft?: boolean;
+  needsUnderlineRight?: boolean;
+}
+
+/**
+ * Creates an authentic 512x512 facet texture for the rectangular sides of a D7 pentagonal prism.
+ * The left half displays the note for the left ridge; the right half displays the note for the right ridge.
+ * When the die lands on a ridge, the ridge is flanked symmetrically by identical note labels on both sides!
+ */
+export function getD7SideTexture(options: D7SideTextureOptions): THREE.CanvasTexture {
+  const key = `d7side|${options.skin}|${options.leftLabel}|${options.rightLabel}|${Boolean(
+    options.needsUnderlineLeft
+  )}|${Boolean(options.needsUnderlineRight)}`;
+  const cached = FACE_TEXTURE_CACHE.get(key);
+  if (cached) return cached;
+
+  const size = 512;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d')!;
+
+  const isIvory = options.skin === 'ivory';
+
+  // Base resin background with horizontal facet gradient
+  const grad = ctx.createLinearGradient(0, 0, size, 0);
+  if (isIvory) {
+    grad.addColorStop(0, '#fbf8f0');
+    grad.addColorStop(0.2, '#f5efe4');
+    grad.addColorStop(0.5, '#e5dacf');
+    grad.addColorStop(0.8, '#f5efe4');
+    grad.addColorStop(1, '#fbf8f0');
+  } else {
+    grad.addColorStop(0, '#2b2733');
+    grad.addColorStop(0.2, '#1f1b26');
+    grad.addColorStop(0.5, '#121017');
+    grad.addColorStop(0.8, '#1f1b26');
+    grad.addColorStop(1, '#2b2733');
+  }
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, size, size);
+
+  // Subtle center groove separating the two facet halves
+  ctx.strokeStyle = isIvory ? 'rgba(180, 160, 130, 0.25)' : 'rgba(212, 175, 55, 0.18)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(256, 24);
+  ctx.lineTo(256, size - 24);
+  ctx.stroke();
+
+  // Subtle border highlight on edges
+  ctx.strokeStyle = isIvory ? 'rgba(255, 255, 255, 0.6)' : 'rgba(255, 255, 255, 0.08)';
+  ctx.lineWidth = 4;
+  ctx.strokeRect(2, 2, size - 4, size - 4);
+
+  const inkColor = isIvory ? '#18151c' : '#e9c765';
+  const accentColor = isIvory ? '#2d2633' : '#d4af37';
+
+  // Draw label helper
+  const drawSideText = (lbl: string, cx: number, needsUnderline?: boolean) => {
+    ctx.save();
+    ctx.fillStyle = inkColor;
+    ctx.strokeStyle = accentColor;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.shadowColor = isIvory ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.65)';
+    ctx.shadowBlur = 2;
+    ctx.shadowOffsetY = 2;
+
+    const serifStack = '"Playfair Display", Georgia, "Times New Roman", serif';
+    const hasAccidental = lbl.includes('♯') || lbl.includes('♭');
+
+    if (hasAccidental) {
+      const letter = lbl[0];
+      const accidental = lbl[1];
+      const baseSize = 108;
+      const accSize = Math.round(baseSize * 0.68);
+
+      ctx.font = `700 ${baseSize}px ${serifStack}`;
+      const letterWidth = ctx.measureText(letter).width;
+      ctx.font = `600 ${accSize}px ${serifStack}`;
+      const accWidth = ctx.measureText(accidental).width;
+
+      const totalWidth = letterWidth + accWidth * 0.85;
+      const startX = cx - totalWidth / 2;
+
+      ctx.textAlign = 'left';
+      ctx.font = `700 ${baseSize}px ${serifStack}`;
+      ctx.fillText(letter, startX, 256 + 4);
+
+      ctx.font = `600 ${accSize}px ${serifStack}`;
+      ctx.fillText(accidental, startX + letterWidth * 0.94, 256 - baseSize * 0.22);
+    } else {
+      let fontSize = 118;
+      if (lbl.length === 2) fontSize = 96;
+      if (lbl.length >= 3) fontSize = 74;
+
+      ctx.font = `700 ${fontSize}px ${serifStack}`;
+      ctx.fillText(lbl, cx, 256 + 4);
+    }
+
+    if (needsUnderline) {
+      const lineHalfWidth = 28;
+      const lineY = 256 + 68;
+      ctx.beginPath();
+      ctx.lineWidth = 5;
+      ctx.lineCap = 'round';
+      ctx.moveTo(cx - lineHalfWidth, lineY);
+      ctx.lineTo(cx + lineHalfWidth, lineY);
+      ctx.stroke();
+    }
+    ctx.restore();
+  };
+
+  drawSideText(options.leftLabel, 136, options.needsUnderlineLeft);
+  drawSideText(options.rightLabel, 376, options.needsUnderlineRight);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 4;
+  texture.needsUpdate = true;
+
+  FACE_TEXTURE_CACHE.set(key, texture);
+  return texture;
+}

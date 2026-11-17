@@ -7,6 +7,7 @@ export interface PolyhedralDieGeometryData {
   faceUpTangents: THREE.Vector3[];
   faceCentroids: THREE.Vector3[];
   inradius: number;
+  faceInradii?: number[];
   convexShape: CANNON.ConvexPolyhedron;
 }
 
@@ -351,12 +352,15 @@ export function computeSettleQuaternion(
 }
 
 /**
- * Builds a 7-faced regular pentagonal prism die (D7) with 2 pentagonal bases
- * (top & bottom) and 5 rectangular side faces.
- * Inradius is uniform (~0.77), providing fair 3D physics settling and clean camera alignment.
+ * Builds a 7-outcome regular pentagonal prism die (D7) with 2 flat pentagonal ends (bases)
+ * and 5 rectangular side faces.
+ * Height is calibrated via the Bereuter patent ratio (H = 1.506 * radius, H_half = 0.753 * radius)
+ * to balance the statistical odds between landing on an edge (the 5 rectangular side states)
+ * versus a flat base (the 2 end pentagons).
  */
 export function buildD7Geometry(radius = 0.95): PolyhedralDieGeometryData {
-  const H_half = radius * Math.cos(Math.PI / 5); // ~0.7686, equidistant inradius!
+  const H_half = 0.753 * radius; // Bereuter Patent calibrated ratio: H = 1.506 * radius
+  const r_in = radius * Math.cos(Math.PI / 5); // Inradius of pentagon (~0.8090 * radius)
   const numSides = 5;
 
   const topVerts: THREE.Vector3[] = [];
@@ -382,7 +386,7 @@ export function buildD7Geometry(radius = 0.95): PolyhedralDieGeometryData {
   const geometry = new THREE.BufferGeometry();
   let groupOffset = 0;
 
-  // Face 0: Top pentagon (y = +H_half)
+  // Outcome 0: Top pentagon base (y = +H_half)
   const normTop = new THREE.Vector3(0, 1, 0);
   const tanTop = new THREE.Vector3(0, 0, -1);
   const centTop = new THREE.Vector3(0, H_half, 0);
@@ -414,7 +418,7 @@ export function buildD7Geometry(radius = 0.95): PolyhedralDieGeometryData {
   geometry.addGroup(groupOffset, 9, 0);
   groupOffset += 9;
 
-  // Face 1: Bottom pentagon (y = -H_half)
+  // Outcome 1: Bottom pentagon base (y = -H_half)
   const normBtm = new THREE.Vector3(0, -1, 0);
   const tanBtm = new THREE.Vector3(0, 0, 1);
   const centBtm = new THREE.Vector3(0, -H_half, 0);
@@ -445,7 +449,7 @@ export function buildD7Geometry(radius = 0.95): PolyhedralDieGeometryData {
   geometry.addGroup(groupOffset, 9, 1);
   groupOffset += 9;
 
-  // Faces 2..6: The 5 side rectangular faces
+  // Visual side quads: Faces 2..6
   for (let k = 0; k < numSides; k++) {
     const next = (k + 1) % numSides;
     const v0 = topVerts[k];
@@ -460,21 +464,19 @@ export function buildD7Geometry(radius = 0.95): PolyhedralDieGeometryData {
       .add(b0)
       .multiplyScalar(0.25);
     const normSide = new THREE.Vector3(centSide.x, 0, centSide.z).normalize();
-    const tanSide = new THREE.Vector3(0, 1, 0);
 
-    faceNormals.push(normSide);
-    faceUpTangents.push(tanSide);
-    faceCentroids.push(centSide);
     polygons.push([b1, b0, v0, v1]);
 
-    // Counter-clockwise outward winding: b1 -> b0 -> v0 and b1 -> v0 -> v1
+    // Counter-clockwise outward winding with full UV mapping
+    // u=0 is along Ridge k, u=1 is along Ridge k+1
+    // v=0 is at bottom (-H_half), v=1 is at top (+H_half)
     const quadTris = [
-      { v: b1, uv: [0.12, 0.12] },
-      { v: b0, uv: [0.88, 0.12] },
-      { v: v0, uv: [0.88, 0.88] },
-      { v: b1, uv: [0.12, 0.12] },
-      { v: v0, uv: [0.88, 0.88] },
-      { v: v1, uv: [0.12, 0.88] },
+      { v: b1, uv: [1, 0] },
+      { v: b0, uv: [0, 0] },
+      { v: v0, uv: [0, 1] },
+      { v: b1, uv: [1, 0] },
+      { v: v0, uv: [0, 1] },
+      { v: v1, uv: [1, 1] },
     ];
 
     quadTris.forEach((pt) => {
@@ -488,13 +490,37 @@ export function buildD7Geometry(radius = 0.95): PolyhedralDieGeometryData {
     groupOffset += 6;
   }
 
+  // The 5 Edge/Ridge outcomes (Outcomes 2..6):
+  // When resting on the opposite side face on the tray, Ridge k points straight UP (+Y).
+  // faceUpTangent points along the longitudinal prism axis (+Y in local space) toward -Z (SCREEN_UP).
+  for (let k = 0; k < numSides; k++) {
+    const angle = (2 * Math.PI * k) / numSides - Math.PI / 2;
+    const ridgeNorm = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
+    const ridgeTan = new THREE.Vector3(0, 1, 0);
+    const ridgeCent = new THREE.Vector3(radius * Math.cos(angle), 0, radius * Math.sin(angle));
+
+    faceNormals.push(ridgeNorm);
+    faceUpTangents.push(ridgeTan);
+    faceCentroids.push(ridgeCent);
+  }
+
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
   geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
   geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
   geometry.computeBoundingSphere();
 
-  const inradius = H_half;
-  const convexShape = buildConvexShape(polygons, faceNormals);
+  const faceInradii = [H_half, H_half, r_in, r_in, r_in, r_in, r_in];
+  const inradius = r_in;
+
+  // Build the 7-face convex collision hull for Cannon.js
+  const convexShape = buildConvexShape(polygons, [
+    normTop,
+    normBtm,
+    ...polygons.slice(2).map((p) => {
+      const cent = new THREE.Vector3().add(p[0]).add(p[1]).add(p[2]).add(p[3]).multiplyScalar(0.25);
+      return new THREE.Vector3(cent.x, 0, cent.z).normalize();
+    }),
+  ]);
 
   return {
     geometry,
@@ -502,6 +528,7 @@ export function buildD7Geometry(radius = 0.95): PolyhedralDieGeometryData {
     faceUpTangents,
     faceCentroids,
     inradius,
+    faceInradii,
     convexShape,
   };
 }

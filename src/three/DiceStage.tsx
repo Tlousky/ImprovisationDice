@@ -18,7 +18,7 @@ import {
   SCALE_INDEX_TO_D7_FACE,
   type PolyhedralDieGeometryData,
 } from './diceGeometry';
-import { getDieFaceTexture, getTrayVelvetTexture } from './diceTextures';
+import { getDieFaceTexture, getD7SideTexture, getTrayVelvetTexture } from './diceTextures';
 
 export interface DiceStageHandle {
   rollChord: () => void;
@@ -94,25 +94,73 @@ function buildD7Materials(
   scalePitches: string[],
   skin: DiceSkin
 ): THREE.MeshPhysicalMaterial[] {
-  const defaultLabels = ['1', '7', '2', '3', '4', '5', '6'];
-  return D7_FACE_TO_SCALE_INDEX.map((scaleIdx: number, faceIdx: number) => {
-    const label = scalePitches[scaleIdx] ?? defaultLabels[faceIdx];
-    const shape = faceIdx < 2 ? 'pentagon' : 'rectangle';
-    const needsUnderline = label === '6' || label === '9' || label === 'C';
-    return new THREE.MeshPhysicalMaterial({
-      map: getDieFaceTexture({
-        label,
-        shape,
-        skin,
-        needsUnderline,
-      }),
-      roughness: skin === 'ivory' ? 0.24 : 0.36,
-      metalness: skin === 'ivory' ? 0.02 : 0.12,
-      clearcoat: skin === 'ivory' ? 0.65 : 0.35,
-      clearcoatRoughness: 0.18,
-      side: THREE.DoubleSide,
-    });
+  const defaultLabels = ['1', '2', '3', '4', '5', '6', '7'];
+  const p0 = scalePitches[0] ?? defaultLabels[0]; // Tonic (Base 0)
+  const p6 = scalePitches[6] ?? defaultLabels[6]; // Leading tone (Base 1)
+  const p1 = scalePitches[1] ?? defaultLabels[1]; // Ridge 0
+  const p2 = scalePitches[2] ?? defaultLabels[2]; // Ridge 1
+  const p3 = scalePitches[3] ?? defaultLabels[3]; // Ridge 2
+  const p4 = scalePitches[4] ?? defaultLabels[4]; // Ridge 3
+  const p5 = scalePitches[5] ?? defaultLabels[5]; // Ridge 4
+
+  const baseProps = {
+    roughness: skin === 'ivory' ? 0.24 : 0.36,
+    metalness: skin === 'ivory' ? 0.02 : 0.12,
+    clearcoat: skin === 'ivory' ? 0.65 : 0.35,
+    clearcoatRoughness: 0.18,
+    side: THREE.DoubleSide,
+  };
+
+  // Face 0: Top pentagon base (Note 0)
+  const matBase0 = new THREE.MeshPhysicalMaterial({
+    ...baseProps,
+    map: getDieFaceTexture({
+      label: p0,
+      shape: 'pentagon',
+      skin,
+      needsUnderline: p0 === '6' || p0 === '9' || p0 === 'C',
+    }),
   });
+
+  // Face 1: Bottom pentagon base (Note 6)
+  const matBase1 = new THREE.MeshPhysicalMaterial({
+    ...baseProps,
+    map: getDieFaceTexture({
+      label: p6,
+      shape: 'pentagon',
+      skin,
+      needsUnderline: p6 === '6' || p6 === '9' || p6 === 'C',
+    }),
+  });
+
+  // The 5 rectangular side faces:
+  // Side 0 (between Ridge 0 [p1] and Ridge 1 [p2])
+  // Side 1 (between Ridge 1 [p2] and Ridge 2 [p3])
+  // Side 2 (between Ridge 2 [p3] and Ridge 3 [p4])
+  // Side 3 (between Ridge 3 [p4] and Ridge 4 [p5])
+  // Side 4 (between Ridge 4 [p5] and Ridge 0 [p1])
+  const ridgeLabels = [p1, p2, p3, p4, p5];
+  const sideMats: THREE.MeshPhysicalMaterial[] = [];
+
+  for (let k = 0; k < 5; k++) {
+    const next = (k + 1) % 5;
+    const leftLabel = ridgeLabels[k];
+    const rightLabel = ridgeLabels[next];
+    sideMats.push(
+      new THREE.MeshPhysicalMaterial({
+        ...baseProps,
+        map: getD7SideTexture({
+          leftLabel,
+          rightLabel,
+          skin,
+          needsUnderlineLeft: leftLabel === '6' || leftLabel === '9' || leftLabel === 'C',
+          needsUnderlineRight: rightLabel === '6' || rightLabel === '9' || rightLabel === 'C',
+        }),
+      })
+    );
+  }
+
+  return [matBase0, matBase1, ...sideMats];
 }
 
 function isBodyCalm(body: CANNON.Body): boolean {
@@ -279,10 +327,11 @@ export const DiceStage = forwardRef<DiceStageHandle, DiceStageProps>(
             d7Data.faceNormals[0],
             d7Data.faceUpTangents[0]
           );
+          const initRad7 = (d7Data.faceInradii?.[0] ?? d7Data.inradius) * MELODY_D7_SCALE;
           d7Body.quaternion.set(initQ7.x, initQ7.y, initQ7.z, initQ7.w);
           d7Mesh.quaternion.copy(initQ7);
-          d7Body.position.set(0, d7Data.inradius * MELODY_D7_SCALE, 0);
-          d7Mesh.position.set(0, d7Data.inradius * MELODY_D7_SCALE, 0);
+          d7Body.position.set(0, initRad7, 0);
+          d7Mesh.position.set(0, initRad7, 0);
           d7Body.velocity.setZero();
           d7Body.angularVelocity.setZero();
         } else {
@@ -592,10 +641,11 @@ export const DiceStage = forwardRef<DiceStageHandle, DiceStageProps>(
         d7Data.faceNormals[0],
         d7Data.faceUpTangents[0]
       );
+      const initRad7 = (d7Data.faceInradii?.[0] ?? d7Data.inradius) * MELODY_D7_SCALE;
       d7Body.quaternion.set(initQ7.x, initQ7.y, initQ7.z, initQ7.w);
       d7Mesh.quaternion.copy(initQ7);
-      d7Body.position.set(0, d7Data.inradius * MELODY_D7_SCALE, 0);
-      d7Mesh.position.set(0, d7Data.inradius * MELODY_D7_SCALE, 0);
+      d7Body.position.set(0, initRad7, 0);
+      d7Mesh.position.set(0, initRad7, 0);
 
       if (modeRef.current === 'chord') {
         d7Mesh.visible = false;
@@ -1061,9 +1111,12 @@ export const DiceStage = forwardRef<DiceStageHandle, DiceStageProps>(
                   d7Data.faceNormals[lastFace],
                   d7Data.faceUpTangents[lastFace]
                 );
-                d7Mesh.position.set(0, d7Data.inradius * MELODY_D7_SCALE, 0);
+                const settleRad7 =
+                  (d7Data.faceInradii?.[lastFace] ?? d7Data.inradius) *
+                  MELODY_D7_SCALE;
+                d7Mesh.position.set(0, settleRad7, 0);
                 d7Mesh.quaternion.copy(finalQ);
-                d7Body.position.set(0, d7Data.inradius * MELODY_D7_SCALE, 0);
+                d7Body.position.set(0, settleRad7, 0);
                 d7Body.velocity.setZero();
                 d7Body.angularVelocity.setZero();
               } else {
@@ -1185,7 +1238,10 @@ export const DiceStage = forwardRef<DiceStageHandle, DiceStageProps>(
                     d7Data.faceNormals[lastFace],
                     d7Data.faceUpTangents[lastFace]
                   );
-                  d7Mesh.position.set(0, d7Data.inradius * MELODY_D7_SCALE, 0);
+                  const settleRad7 =
+                    (d7Data.faceInradii?.[lastFace] ?? d7Data.inradius) *
+                    MELODY_D7_SCALE;
+                  d7Mesh.position.set(0, settleRad7, 0);
                   d7Mesh.quaternion.copy(finalQ);
                 } else {
                   const { allowedFaces } = rollState;

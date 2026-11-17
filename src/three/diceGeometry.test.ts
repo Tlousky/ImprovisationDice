@@ -61,12 +61,20 @@ describe('Polyhedral Dice Geometry & Physics Hulls', () => {
   });
 
   it('builds a D7 with 7 distinct faces (2 pentagons + 5 side rectangles) and accurate top-face detection', () => {
-    const d7 = buildD7Geometry(0.95);
+    const radius = 0.95;
+    const d7 = buildD7Geometry(radius);
 
     expect(d7.faceNormals).toHaveLength(7);
     expect(d7.faceUpTangents).toHaveLength(7);
     expect(d7.geometry.groups).toHaveLength(7);
     expect(d7.convexShape.faces).toHaveLength(7);
+    expect(d7.faceInradii).toHaveLength(7);
+
+    // Verify calibrated Bereuter patent ratio: H_half = 0.753 * radius (H = 1.506 * radius)
+    expect(d7.faceInradii![0]).toBeCloseTo(0.753 * radius, 4);
+    expect(d7.faceInradii![1]).toBeCloseTo(0.753 * radius, 4);
+    // Side inradius r_in = radius * cos(pi/5)
+    expect(d7.faceInradii![2]).toBeCloseTo(radius * Math.cos(Math.PI / 5), 4);
 
     for (let f = 0; f < 7; f++) {
       const quat = computeSettleQuaternion(
