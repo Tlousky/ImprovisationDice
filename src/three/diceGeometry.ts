@@ -421,7 +421,7 @@ export function buildD7Geometry(radius = 0.95): PolyhedralDieGeometryData {
   faceNormals.push(normBtm);
   faceUpTangents.push(tanBtm);
   faceCentroids.push(centBtm);
-  polygons.push([...btmVerts].reverse());
+  polygons.push([...btmVerts]);
 
   const toUvBtm = (v: THREE.Vector3): [number, number] => [
     0.5 - v.x * uvScalePentagon,
@@ -429,11 +429,10 @@ export function buildD7Geometry(radius = 0.95): PolyhedralDieGeometryData {
   ];
 
   // Triangulate bottom pentagon fan (counter-clockwise viewed from outside -Y)
-  const reversedBtm = [...btmVerts].reverse();
   const btmFan = [
-    [reversedBtm[0], reversedBtm[1], reversedBtm[2]],
-    [reversedBtm[0], reversedBtm[2], reversedBtm[3]],
-    [reversedBtm[0], reversedBtm[3], reversedBtm[4]],
+    [btmVerts[0], btmVerts[1], btmVerts[2]],
+    [btmVerts[0], btmVerts[2], btmVerts[3]],
+    [btmVerts[0], btmVerts[3], btmVerts[4]],
   ];
   btmFan.forEach((tri) => {
     tri.forEach((v) => {
@@ -466,16 +465,16 @@ export function buildD7Geometry(radius = 0.95): PolyhedralDieGeometryData {
     faceNormals.push(normSide);
     faceUpTangents.push(tanSide);
     faceCentroids.push(centSide);
-    polygons.push([b0, b1, v1, v0]);
+    polygons.push([v0, v1, b1, b0]);
 
-    // Counter-clockwise outward winding: b0 -> b1 -> v0 and b1 -> v1 -> v0
+    // Counter-clockwise outward winding: v0 -> v1 -> b0 and v1 -> b1 -> b0
     const quadTris = [
-      { v: b0, uv: [0.12, 0.12] },
-      { v: b1, uv: [0.88, 0.12] },
       { v: v0, uv: [0.12, 0.88] },
-      { v: b1, uv: [0.88, 0.12] },
       { v: v1, uv: [0.88, 0.88] },
-      { v: v0, uv: [0.12, 0.88] },
+      { v: b0, uv: [0.12, 0.12] },
+      { v: v1, uv: [0.88, 0.88] },
+      { v: b1, uv: [0.88, 0.12] },
+      { v: b0, uv: [0.12, 0.12] },
     ];
 
     quadTris.forEach((pt) => {
