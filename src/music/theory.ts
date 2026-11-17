@@ -226,6 +226,8 @@ export function buildChordResult(
     (interval) => 60 + root.semitone + interval
   );
 
+  const chordNotes = rightHandNotes;
+  const bassNotes = [bassRoot, bassCompanion];
   const midiNotes = [bassRoot, bassCompanion, ...rightHandNotes];
   const noteNames = getChordNoteNames(root, chord);
   const symbol = `${root.label}${chord.displaySuffix}`;
@@ -238,6 +240,8 @@ export function buildChordResult(
     fullTitle,
     noteNames,
     midiNotes,
+    chordNotes,
+    bassNotes,
     timestamp: Date.now(),
   };
 }

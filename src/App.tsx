@@ -156,7 +156,7 @@ export function App() {
     (d12FaceIndex: number, d20FaceIndex: number) => {
       const result = buildChordResult(d12FaceIndex, d20FaceIndex);
       setChordResult(result);
-      audio.playChord(result.midiNotes, 'block');
+      audio.playChordAndRoot(result.chordNotes, result.bassNotes);
       setHistory((prev) =>
         [
           {
@@ -251,7 +251,7 @@ export function App() {
         if (which === 'd12') {
           audio.playNote(chordResult.root.midiBase, '2n');
         } else {
-          audio.playChord(chordResult.midiNotes, 'arpeggio');
+          audio.playChord(chordResult.chordNotes, 'block');
         }
       } else {
         const landed = melodyStepsRef.current.filter(
@@ -278,7 +278,7 @@ export function App() {
       if (entry.kind === 'chord') {
         setMode('chord');
         setChordResult(entry.result);
-        audio.playChord(entry.result.midiNotes, 'block');
+        audio.playChordAndRoot(entry.result.chordNotes, entry.result.bassNotes);
       } else {
         setMode('melody');
         setNoteCount(entry.result.steps.length);
@@ -393,7 +393,8 @@ export function App() {
             result={chordResult}
             isRolling={isRolling}
             onPlayBlock={() => {
-              if (chordResult) audio.playChord(chordResult.midiNotes, 'block');
+              if (chordResult)
+                audio.playChordAndRoot(chordResult.chordNotes, chordResult.bassNotes);
             }}
             onPlayArpeggio={() => {
               if (chordResult) audio.playChord(chordResult.midiNotes, 'arpeggio');

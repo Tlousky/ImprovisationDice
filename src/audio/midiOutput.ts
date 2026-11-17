@@ -97,6 +97,19 @@ export class MidiOutputManager {
     });
   }
 
+  sendChordAndRoot(
+    chordNotes: number[],
+    rootNotes: number[],
+    durationMs = 1700
+  ): void {
+    chordNotes.forEach((note, idx) => {
+      this.sendNote(note, 94, durationMs, idx * 18);
+    });
+    rootNotes.forEach((note, idx) => {
+      this.sendNote(note, 88, durationMs, 500 + idx * 15);
+    });
+  }
+
   dispose(): void {
     if (this.midiAccess) {
       this.midiAccess.onstatechange = null;

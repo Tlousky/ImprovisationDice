@@ -183,6 +183,43 @@ export class PianoEngine {
     this.midiOutput?.sendChord(midiNotes, mode, 1750);
   }
 
+  async playChordAndRoot(
+    chordNotes: number[],
+    rootNotes: number[]
+  ): Promise<void> {
+    if (chordNotes.length === 0 && rootNotes.length === 0) return;
+    await this.unlock();
+    const instrument = this.getActiveInstrument();
+    if (!instrument) return;
+
+    const baseTime = Tone.now() + 0.02;
+
+    // 1. Play the chord first
+    chordNotes.forEach((midi, idx) => {
+      const noteName = midiToToneNote(midi);
+      instrument.triggerAttackRelease(
+        noteName,
+        '1.5n',
+        baseTime + idx * 0.018,
+        0.82 + Math.min(0.12, idx * 0.02)
+      );
+    });
+
+    // 2. Play the root after 0.5s
+    const rootTime = baseTime + 0.5;
+    rootNotes.forEach((midi, idx) => {
+      const noteName = midiToToneNote(midi);
+      instrument.triggerAttackRelease(
+        noteName,
+        '1.5n',
+        rootTime + idx * 0.015,
+        0.86
+      );
+    });
+
+    this.midiOutput?.sendChordAndRoot(chordNotes, rootNotes, 1750);
+  }
+
   stopMelodySequence(): void {
     this.melodyToken += 1;
   }

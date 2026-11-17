@@ -50,12 +50,16 @@ describe('Composer Dice Music Theory', () => {
     expect(halfDim.symbol).toBe('E♭ø');
     expect(halfDim.noteNames).toEqual(['E♭', 'G♭', 'A', 'D♭']);
     expect(halfDim.midiNotes).toEqual([39, 51, 63, 66, 69, 73]);
+    expect(halfDim.chordNotes).toEqual([63, 66, 69, 73]);
+    expect(halfDim.bassNotes).toEqual([39, 51]);
 
     // D (index 2) + minor (index 3) -> Dm
     const dMinor = buildChordResult(2, 3);
     expect(dMinor.symbol).toBe('Dm');
     expect(dMinor.noteNames).toEqual(['D', 'F', 'A']);
     expect(dMinor.midiNotes).toEqual([38, 45, 62, 65, 69]);
+    expect(dMinor.chordNotes).toEqual([62, 65, 69]);
+    expect(dMinor.bassNotes).toEqual([38, 45]);
 
     // Every combination of D12 x D20 produces strictly ascending MIDI notes
     for (let r = 0; r < D12_PITCH_FACES.length; r++) {

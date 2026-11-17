@@ -90,6 +90,13 @@ export function useAudioEngine() {
     []
   );
 
+  const playChordAndRoot = useCallback(
+    async (chordNotes: number[], rootNotes: number[]) => {
+      await engineRef.current?.playChordAndRoot(chordNotes, rootNotes);
+    },
+    []
+  );
+
   const playMelodySequence = useCallback(
     async (midiNotes: number[], onStep?: (index: number) => void) => {
       await engineRef.current?.playMelodySequence(midiNotes, melodyBpm, onStep);
@@ -123,6 +130,7 @@ export function useAudioEngine() {
     unlockAudio,
     playNote,
     playChord,
+    playChordAndRoot,
     playMelodySequence,
     stopMelodyPlayback,
     playDiceImpact,

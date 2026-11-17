@@ -45,8 +45,40 @@ export interface ChordRollResult {
   fullTitle: string;
   noteNames: string[];
   midiNotes: number[];
+  chordNotes: number[];
+  bassNotes: number[];
   timestamp: number;
 }
+
+export type DiatonicModeType =
+  | 'Ionian'
+  | 'Dorian'
+  | 'Phrygian'
+  | 'Lydian'
+  | 'Mixolydian'
+  | 'Aeolian'
+  | 'Locrian';
+
+export interface DiatonicModeEntry {
+  id: string; // e.g. "C-Dorian"
+  keyName: string; // e.g. "Bb Major" (parent key from table)
+  modeType: DiatonicModeType; // e.g. "Dorian"
+  tonic: string; // e.g. "C"
+  tonicSemitone: number;
+  displayName: string; // e.g. "C Dorian (B♭ Major)"
+  scalePitches: string[]; // e.g. ['C', 'D', 'E♭', 'F', 'G', 'A', 'B♭']
+  semitones: number[]; // e.g. [0, 2, 3, 5, 7, 9, 10]
+}
+
+export type MelodyModeSelection =
+  | {
+      isChromatic: true;
+      id: 'chromatic';
+      name: 'Chromatic';
+    }
+  | ({
+      isChromatic: false;
+    } & DiatonicModeEntry);
 
 export interface MelodyNoteStep {
   stepIndex: number;
