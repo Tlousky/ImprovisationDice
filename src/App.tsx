@@ -13,7 +13,6 @@ import {
   D12_PITCH_FACES,
   buildChordResult,
   buildMelodyStepMidi,
-  midiToDisplayNote,
 } from './music/theory';
 import { DiceStage, type DiceStageHandle } from './three/DiceStage';
 import type {
@@ -23,6 +22,7 @@ import type {
   HistoryEntry,
   MelodyModeSelection,
   MelodyNoteStep,
+  PitchClass,
   TrayTheme,
 } from './types/app';
 
@@ -185,14 +185,35 @@ export function App() {
   );
 
   const handleMelodyStepLanded = useCallback(
-    (stepIndex: number, d12FaceIndex: number) => {
-      const pitch = D12_PITCH_FACES[d12FaceIndex % D12_PITCH_FACES.length];
+    (stepIndex: number, d12FaceIndex: number, d7ScaleIndex?: number) => {
+      let pitch: PitchClass;
+      if (
+        d7ScaleIndex !== undefined &&
+        d7ScaleIndex >= 0 &&
+        !melodyMode.isChromatic
+      ) {
+        const label =
+          melodyMode.scalePitches[d7ScaleIndex % melodyMode.scalePitches.length];
+        const semitone =
+          melodyMode.semitones[d7ScaleIndex % melodyMode.semitones.length];
+        const match = D12_PITCH_FACES.find((p) => p.semitone === (semitone % 12));
+        pitch = {
+          id: match?.id ?? label,
+          label,
+          semitone: ((semitone % 12) + 12) % 12,
+          midiBase: 60 + semitone,
+          needsUnderline: label === 'C' || label === '6' || label === '9',
+        };
+      } else {
+        pitch = D12_PITCH_FACES[d12FaceIndex % D12_PITCH_FACES.length];
+      }
+
       const prevMidi =
         stepIndex > 0
           ? melodyStepsRef.current[stepIndex - 1]?.midiNote ?? null
           : null;
       const midiNote = buildMelodyStepMidi(pitch, prevMidi);
-      const noteLabel = midiToDisplayNote(midiNote);
+      const noteLabel = `${pitch.label}${Math.floor(midiNote / 12) - 1}`;
 
       audio.playNote(midiNote, '4n');
 
@@ -219,7 +240,7 @@ export function App() {
       setMelodySteps(nextSteps);
       setMelodyProgressIndex(stepIndex + 1);
     },
-    [audio]
+    [audio, melodyMode]
   );
 
   const handleMelodySequenceComplete = useCallback(() => {
@@ -252,7 +273,7 @@ export function App() {
   }, [playMelodyPhrase]);
 
   const handleDieTapped = useCallback(
-    async (which: 'd12' | 'd20') => {
+    async (which: 'd12' | 'd20' | 'd7') => {
       if (isRolling) return;
       await audio.unlockAudio();
 
@@ -449,6 +470,8 @@ export function App() {
             skin={skin}
             trayTheme={trayTheme}
             allowedMelodyFaces={allowedMelodyFaces}
+            melodyDieSides={melodyMode.isChromatic ? 12 : 7}
+            activeMelodyScale={melodyMode.isChromatic ? undefined : melodyMode.scalePitches}
             onChordLanded={handleChordLanded}
             onMelodyStepLanded={handleMelodyStepLanded}
             onMelodySequenceComplete={handleMelodySequenceComplete}
@@ -470,6 +493,7 @@ export function App() {
           noteCount={noteCount}
           isRolling={isRolling}
           melodyProgressIndex={melodyProgressIndex}
+          melodyDieSides={melodyMode.isChromatic ? 12 : 7}
           onRoll={handleRoll}
           onFinishMelodyEarly={() => stageRef.current?.finishMelodyEarly()}
         />

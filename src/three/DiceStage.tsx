@@ -11,8 +11,11 @@ import type { AppMode, DiceSkin, TrayTheme } from '../types/app';
 import {
   buildD12Geometry,
   buildD20Geometry,
+  buildD7Geometry,
   computeSettleQuaternion,
   getTopFaceIndex,
+  D7_FACE_TO_SCALE_INDEX,
+  SCALE_INDEX_TO_D7_FACE,
   type PolyhedralDieGeometryData,
 } from './diceGeometry';
 import { getDieFaceTexture, getTrayVelvetTexture } from './diceTextures';
@@ -28,17 +31,24 @@ interface DiceStageProps {
   skin: DiceSkin;
   trayTheme: TrayTheme;
   allowedMelodyFaces?: number[];
+  melodyDieSides?: 7 | 12;
+  activeMelodyScale?: string[];
   onChordLanded: (d12FaceIndex: number, d20FaceIndex: number) => void;
-  onMelodyStepLanded: (stepIndex: number, d12FaceIndex: number) => void;
+  onMelodyStepLanded: (
+    stepIndex: number,
+    d12FaceIndex: number,
+    d7ScaleIndex?: number
+  ) => void;
   onMelodySequenceComplete: () => void;
   onDiceImpact?: (intensity: number) => void;
-  onDieTapped?: (which: 'd12' | 'd20') => void;
+  onDieTapped?: (which: 'd12' | 'd20' | 'd7') => void;
   onRollingChange?: (rolling: boolean) => void;
 }
 
 const TRAY_HALF_W = 2.45;
 const TRAY_HALF_D = 2.65;
 const MELODY_D12_SCALE = 1.24;
+const MELODY_D7_SCALE = 1.2;
 
 function randomRange(min: number, max: number): number {
   return min + Math.random() * (max - min);
@@ -80,6 +90,30 @@ function buildD20Materials(skin: DiceSkin): THREE.MeshPhysicalMaterial[] {
   );
 }
 
+function buildD7Materials(
+  scalePitches: string[],
+  skin: DiceSkin
+): THREE.MeshPhysicalMaterial[] {
+  const defaultLabels = ['1', '7', '2', '3', '4', '5', '6'];
+  return D7_FACE_TO_SCALE_INDEX.map((scaleIdx: number, faceIdx: number) => {
+    const label = scalePitches[scaleIdx] ?? defaultLabels[faceIdx];
+    const shape = faceIdx < 2 ? 'pentagon' : 'rectangle';
+    const needsUnderline = label === '6' || label === '9' || label === 'C';
+    return new THREE.MeshPhysicalMaterial({
+      map: getDieFaceTexture({
+        label,
+        shape,
+        skin,
+        needsUnderline,
+      }),
+      roughness: skin === 'ivory' ? 0.24 : 0.36,
+      metalness: skin === 'ivory' ? 0.02 : 0.12,
+      clearcoat: skin === 'ivory' ? 0.65 : 0.35,
+      clearcoatRoughness: 0.18,
+    });
+  });
+}
+
 function isBodyCalm(body: CANNON.Body): boolean {
   return (
     body.velocity.lengthSquared() < 0.04 &&
@@ -95,6 +129,8 @@ export const DiceStage = forwardRef<DiceStageHandle, DiceStageProps>(
       skin,
       trayTheme,
       allowedMelodyFaces,
+      melodyDieSides = 12,
+      activeMelodyScale,
       onChordLanded,
       onMelodyStepLanded,
       onMelodySequenceComplete,
@@ -108,6 +144,12 @@ export const DiceStage = forwardRef<DiceStageHandle, DiceStageProps>(
 
     const allowedMelodyFacesRef = useRef(allowedMelodyFaces);
     allowedMelodyFacesRef.current = allowedMelodyFaces;
+
+    const melodyDieSidesRef = useRef(melodyDieSides);
+    melodyDieSidesRef.current = melodyDieSides;
+
+    const activeMelodyScaleRef = useRef(activeMelodyScale);
+    activeMelodyScaleRef.current = activeMelodyScale;
 
     const callbacksRef = useRef({
       onChordLanded,
@@ -132,11 +174,14 @@ export const DiceStage = forwardRef<DiceStageHandle, DiceStageProps>(
     const sceneRefs = useRef<{
       d12Mesh?: THREE.Mesh;
       d20Mesh?: THREE.Mesh;
+      d7Mesh?: THREE.Mesh;
       floorMesh?: THREE.Mesh;
       d12Body?: CANNON.Body;
       d20Body?: CANNON.Body;
+      d7Body?: CANNON.Body;
       d12Data?: PolyhedralDieGeometryData;
       d20Data?: PolyhedralDieGeometryData;
+      d7Data?: PolyhedralDieGeometryData;
       world?: CANNON.World;
       rollChord?: () => void;
       rollMelody?: (count: number, allowedFaces?: number[]) => void;
@@ -150,9 +195,9 @@ export const DiceStage = forwardRef<DiceStageHandle, DiceStageProps>(
       finishMelodyEarly: () => sceneRefs.current.finishMelodyEarly?.(),
     }));
 
-    // Update dice face materials dynamically when skin changes
+    // Update dice face materials dynamically when skin or active scale changes
     useEffect(() => {
-      const { d12Mesh, d20Mesh } = sceneRefs.current;
+      const { d12Mesh, d20Mesh, d7Mesh } = sceneRefs.current;
       if (d12Mesh) {
         const oldMats = d12Mesh.material as THREE.Material[];
         d12Mesh.material = buildD12Materials(skin);
@@ -163,7 +208,15 @@ export const DiceStage = forwardRef<DiceStageHandle, DiceStageProps>(
         d20Mesh.material = buildD20Materials(skin);
         oldMats.forEach((m) => m.dispose());
       }
-    }, [skin]);
+      if (d7Mesh) {
+        const oldMats = d7Mesh.material as THREE.Material[];
+        d7Mesh.material = buildD7Materials(
+          activeMelodyScale ?? ['1', '2', '3', '4', '5', '6', '7'],
+          skin
+        );
+        oldMats.forEach((m) => m.dispose());
+      }
+    }, [skin, activeMelodyScale]);
 
     // Update velvet floor texture dynamically when trayTheme changes
     useEffect(() => {
@@ -175,11 +228,32 @@ export const DiceStage = forwardRef<DiceStageHandle, DiceStageProps>(
       }
     }, [trayTheme]);
 
-    // Sync D20 visibility and D12 resting scale when switching modes
+    // Sync dice visibility, body presence, and resting poses when switching modes or melody die side count
     useEffect(() => {
-      const { d12Mesh, d20Mesh, d12Body, d20Body, d12Data, d20Data, world } =
-        sceneRefs.current;
-      if (!d12Mesh || !d20Mesh || !d12Body || !d20Body || !d12Data || !d20Data || !world) {
+      const {
+        d12Mesh,
+        d20Mesh,
+        d7Mesh,
+        d12Body,
+        d20Body,
+        d7Body,
+        d12Data,
+        d20Data,
+        d7Data,
+        world,
+      } = sceneRefs.current;
+      if (
+        !d12Mesh ||
+        !d20Mesh ||
+        !d7Mesh ||
+        !d12Body ||
+        !d20Body ||
+        !d7Body ||
+        !d12Data ||
+        !d20Data ||
+        !d7Data ||
+        !world
+      ) {
         return;
       }
 
@@ -188,14 +262,57 @@ export const DiceStage = forwardRef<DiceStageHandle, DiceStageProps>(
         if (world.bodies.includes(d20Body)) {
           world.removeBody(d20Body);
         }
-        d12Mesh.scale.setScalar(MELODY_D12_SCALE);
-        d12Body.position.set(0, d12Data.inradius * MELODY_D12_SCALE, 0);
-        d12Body.velocity.setZero();
-        d12Body.angularVelocity.setZero();
+
+        if (melodyDieSides === 7) {
+          d12Mesh.visible = false;
+          if (world.bodies.includes(d12Body)) {
+            world.removeBody(d12Body);
+          }
+
+          d7Mesh.visible = true;
+          if (!world.bodies.includes(d7Body)) {
+            world.addBody(d7Body);
+          }
+          d7Mesh.scale.setScalar(MELODY_D7_SCALE);
+          const initQ7 = computeSettleQuaternion(
+            d7Data.faceNormals[0],
+            d7Data.faceUpTangents[0]
+          );
+          d7Body.quaternion.set(initQ7.x, initQ7.y, initQ7.z, initQ7.w);
+          d7Mesh.quaternion.copy(initQ7);
+          d7Body.position.set(0, d7Data.inradius * MELODY_D7_SCALE, 0);
+          d7Mesh.position.set(0, d7Data.inradius * MELODY_D7_SCALE, 0);
+          d7Body.velocity.setZero();
+          d7Body.angularVelocity.setZero();
+        } else {
+          d7Mesh.visible = false;
+          if (world.bodies.includes(d7Body)) {
+            world.removeBody(d7Body);
+          }
+
+          d12Mesh.visible = true;
+          if (!world.bodies.includes(d12Body)) {
+            world.addBody(d12Body);
+          }
+          d12Mesh.scale.setScalar(MELODY_D12_SCALE);
+          d12Body.position.set(0, d12Data.inradius * MELODY_D12_SCALE, 0);
+          d12Mesh.position.set(0, d12Data.inradius * MELODY_D12_SCALE, 0);
+          d12Body.velocity.setZero();
+          d12Body.angularVelocity.setZero();
+        }
       } else {
+        d7Mesh.visible = false;
+        if (world.bodies.includes(d7Body)) {
+          world.removeBody(d7Body);
+        }
+
         d20Mesh.visible = true;
         if (!world.bodies.includes(d20Body)) {
           world.addBody(d20Body);
+        }
+        d12Mesh.visible = true;
+        if (!world.bodies.includes(d12Body)) {
+          world.addBody(d12Body);
         }
         d12Mesh.scale.setScalar(1);
         d12Body.position.set(-1.12, d12Data.inradius, 0.12);
@@ -205,7 +322,7 @@ export const DiceStage = forwardRef<DiceStageHandle, DiceStageProps>(
         d20Body.velocity.setZero();
         d20Body.angularVelocity.setZero();
       }
-    }, [mode]);
+    }, [mode, melodyDieSides]);
 
     useEffect(() => {
       const container = containerRef.current;
@@ -331,9 +448,10 @@ export const DiceStage = forwardRef<DiceStageHandle, DiceStageProps>(
       });
       scene.add(trayGroup);
 
-      // Build D12 and D20 meshes
+      // Build D12, D20, and D7 meshes
       const d12Data = buildD12Geometry(0.86);
       const d20Data = buildD20Geometry(0.92);
+      const d7Data = buildD7Geometry(0.95);
 
       const d12Mesh = new THREE.Mesh(d12Data.geometry, buildD12Materials(skin));
       d12Mesh.castShadow = true;
@@ -344,6 +462,17 @@ export const DiceStage = forwardRef<DiceStageHandle, DiceStageProps>(
       d20Mesh.castShadow = true;
       d20Mesh.receiveShadow = true;
       scene.add(d20Mesh);
+
+      const d7Mesh = new THREE.Mesh(
+        d7Data.geometry,
+        buildD7Materials(
+          activeMelodyScaleRef.current ?? ['1', '2', '3', '4', '5', '6', '7'],
+          skin
+        )
+      );
+      d7Mesh.castShadow = true;
+      d7Mesh.receiveShadow = true;
+      scene.add(d7Mesh);
 
       // Build cannon-es physics world
       const world = new CANNON.World({
@@ -421,6 +550,13 @@ export const DiceStage = forwardRef<DiceStageHandle, DiceStageProps>(
         linearDamping: 0.28,
         angularDamping: 0.32,
       });
+      const d7Body = new CANNON.Body({
+        mass: 1.2,
+        material: dicePhysMat,
+        shape: d7Data.convexShape,
+        linearDamping: 0.28,
+        angularDamping: 0.32,
+      });
 
       const handleCollide = (event: { contact: CANNON.ContactEquation }) => {
         const impactVel = Math.abs(event.contact.getImpactVelocityAlongNormal());
@@ -430,8 +566,9 @@ export const DiceStage = forwardRef<DiceStageHandle, DiceStageProps>(
       };
       d12Body.addEventListener('collide', handleCollide);
       d20Body.addEventListener('collide', handleCollide);
+      d7Body.addEventListener('collide', handleCollide);
 
-      // Initial resting poses (E♭ on D12, M⁷ on D20, matching product hero look)
+      // Initial resting poses (E♭ on D12, M⁷ on D20, Tonic on D7)
       d12Body.position.set(-1.12, d12Data.inradius, 0.12);
       const initQ12 = computeSettleQuaternion(
         d12Data.faceNormals[3],
@@ -450,14 +587,33 @@ export const DiceStage = forwardRef<DiceStageHandle, DiceStageProps>(
       d20Mesh.position.set(1.12, d20Data.inradius, 0.12);
       d20Mesh.quaternion.copy(initQ20);
 
-      world.addBody(d12Body);
+      const initQ7 = computeSettleQuaternion(
+        d7Data.faceNormals[0],
+        d7Data.faceUpTangents[0]
+      );
+      d7Body.quaternion.set(initQ7.x, initQ7.y, initQ7.z, initQ7.w);
+      d7Mesh.quaternion.copy(initQ7);
+      d7Body.position.set(0, d7Data.inradius * MELODY_D7_SCALE, 0);
+      d7Mesh.position.set(0, d7Data.inradius * MELODY_D7_SCALE, 0);
+
       if (modeRef.current === 'chord') {
+        d7Mesh.visible = false;
+        world.addBody(d12Body);
         world.addBody(d20Body);
       } else {
         d20Mesh.visible = false;
-        d12Mesh.scale.setScalar(MELODY_D12_SCALE);
-        d12Body.position.set(0, d12Data.inradius * MELODY_D12_SCALE, 0);
-        d12Mesh.position.set(0, d12Data.inradius * MELODY_D12_SCALE, 0);
+        if (melodyDieSidesRef.current === 7) {
+          d12Mesh.visible = false;
+          d7Mesh.visible = true;
+          world.addBody(d7Body);
+        } else {
+          d7Mesh.visible = false;
+          d12Mesh.visible = true;
+          d12Mesh.scale.setScalar(MELODY_D12_SCALE);
+          d12Body.position.set(0, d12Data.inradius * MELODY_D12_SCALE, 0);
+          d12Mesh.position.set(0, d12Data.inradius * MELODY_D12_SCALE, 0);
+          world.addBody(d12Body);
+        }
       }
 
       // Animation & roll state machine
@@ -485,6 +641,7 @@ export const DiceStage = forwardRef<DiceStageHandle, DiceStageProps>(
           }
         | {
             kind: 'melody-physics';
+            dieType: 'd12' | 'd7';
             elapsed: number;
             calmFrames: number;
             stepIndex: number;
@@ -493,13 +650,14 @@ export const DiceStage = forwardRef<DiceStageHandle, DiceStageProps>(
           }
         | {
             kind: 'melody-settle';
+            dieType: 'd12' | 'd7';
             elapsed: number;
             duration: number;
-            startPos12: THREE.Vector3;
-            endPos12: THREE.Vector3;
-            startQ12: THREE.Quaternion;
-            endQ12: THREE.Quaternion;
-            face12: number;
+            startPos: THREE.Vector3;
+            endPos: THREE.Vector3;
+            startQ: THREE.Quaternion;
+            endQ: THREE.Quaternion;
+            face: number;
             stepIndex: number;
             totalSteps: number;
             allowedFaces?: number[];
@@ -535,20 +693,39 @@ export const DiceStage = forwardRef<DiceStageHandle, DiceStageProps>(
       const startSingleMelodyThrow = (
         stepIndex: number,
         totalSteps: number,
+        dieType: 'd12' | 'd7',
         allowedFaces?: number[]
       ) => {
-        d12Mesh.scale.setScalar(MELODY_D12_SCALE);
-        launchBody(
-          d12Body,
-          randomRange(-1.1, 1.1),
-          randomRange(2.4, 2.9),
-          randomRange(-1.1, 1.1),
-          randomRange(-2.8, 2.8),
-          randomRange(-1.2, 0.8),
-          randomRange(-2.8, 2.8)
-        );
+        if (dieType === 'd7') {
+          d7Mesh.visible = true;
+          d12Mesh.visible = false;
+          d7Mesh.scale.setScalar(MELODY_D7_SCALE);
+          launchBody(
+            d7Body,
+            randomRange(-1.1, 1.1),
+            randomRange(2.4, 2.9),
+            randomRange(-1.1, 1.1),
+            randomRange(-2.8, 2.8),
+            randomRange(-1.2, 0.8),
+            randomRange(-2.8, 2.8)
+          );
+        } else {
+          d12Mesh.visible = true;
+          d7Mesh.visible = false;
+          d12Mesh.scale.setScalar(MELODY_D12_SCALE);
+          launchBody(
+            d12Body,
+            randomRange(-1.1, 1.1),
+            randomRange(2.4, 2.9),
+            randomRange(-1.1, 1.1),
+            randomRange(-2.8, 2.8),
+            randomRange(-1.2, 0.8),
+            randomRange(-2.8, 2.8)
+          );
+        }
         rollState = {
           kind: 'melody-physics',
+          dieType,
           elapsed: 0,
           calmFrames: 0,
           stepIndex,
@@ -559,9 +736,17 @@ export const DiceStage = forwardRef<DiceStageHandle, DiceStageProps>(
 
       const triggerChordRoll = () => {
         if (rollState.kind !== 'idle') return;
+        d7Mesh.visible = false;
+        if (world.bodies.includes(d7Body)) {
+          world.removeBody(d7Body);
+        }
         d20Mesh.visible = true;
         if (!world.bodies.includes(d20Body)) {
           world.addBody(d20Body);
+        }
+        d12Mesh.visible = true;
+        if (!world.bodies.includes(d12Body)) {
+          world.addBody(d12Body);
         }
         d12Mesh.scale.setScalar(1);
 
@@ -596,9 +781,25 @@ export const DiceStage = forwardRef<DiceStageHandle, DiceStageProps>(
         if (world.bodies.includes(d20Body)) {
           world.removeBody(d20Body);
         }
+        const dieType = melodyDieSidesRef.current === 7 ? 'd7' : 'd12';
+        if (dieType === 'd7') {
+          if (world.bodies.includes(d12Body)) {
+            world.removeBody(d12Body);
+          }
+          if (!world.bodies.includes(d7Body)) {
+            world.addBody(d7Body);
+          }
+        } else {
+          if (world.bodies.includes(d7Body)) {
+            world.removeBody(d7Body);
+          }
+          if (!world.bodies.includes(d12Body)) {
+            world.addBody(d12Body);
+          }
+        }
         callbacksRef.current.onRollingChange?.(true);
         const facesToUse = allowedFaces ?? allowedMelodyFacesRef.current;
-        startSingleMelodyThrow(0, clampedCount, facesToUse);
+        startSingleMelodyThrow(0, clampedCount, dieType, facesToUse);
       };
 
       const finishMelodyEarly = () => {
@@ -613,11 +814,14 @@ export const DiceStage = forwardRef<DiceStageHandle, DiceStageProps>(
       sceneRefs.current = {
         d12Mesh,
         d20Mesh,
+        d7Mesh,
         floorMesh,
         d12Body,
         d20Body,
+        d7Body,
         d12Data,
         d20Data,
+        d7Data,
         world,
         rollChord: triggerChordRoll,
         rollMelody: triggerMelodyRoll,
@@ -635,11 +839,24 @@ export const DiceStage = forwardRef<DiceStageHandle, DiceStageProps>(
         pointer.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
 
         raycaster.setFromCamera(pointer, camera);
-        const targets = d20Mesh.visible ? [d12Mesh, d20Mesh] : [d12Mesh];
+        const targets: THREE.Mesh[] = [];
+        if (modeRef.current === 'chord') {
+          if (d12Mesh.visible) targets.push(d12Mesh);
+          if (d20Mesh.visible) targets.push(d20Mesh);
+        } else {
+          if (d7Mesh.visible) targets.push(d7Mesh);
+          if (d12Mesh.visible) targets.push(d12Mesh);
+        }
         const hits = raycaster.intersectObjects(targets, false);
         if (hits.length > 0) {
           const hitObj = hits[0].object;
-          callbacksRef.current.onDieTapped?.(hitObj === d12Mesh ? 'd12' : 'd20');
+          if (hitObj === d7Mesh) {
+            callbacksRef.current.onDieTapped?.('d7');
+          } else if (hitObj === d12Mesh) {
+            callbacksRef.current.onDieTapped?.('d12');
+          } else {
+            callbacksRef.current.onDieTapped?.('d20');
+          }
         }
       };
       renderer.domElement.addEventListener('pointerup', onPointerUp);
@@ -799,19 +1016,25 @@ export const DiceStage = forwardRef<DiceStageHandle, DiceStageProps>(
           world.step(1 / 60, dt * 1.35, 4);
           rollState.elapsed += dt;
 
-          d12Mesh.position.set(
-            d12Body.position.x,
-            Math.max(d12Data.inradius * MELODY_D12_SCALE, d12Body.position.y),
-            d12Body.position.z
+          const isD7 = rollState.dieType === 'd7';
+          const activeMesh = isD7 ? d7Mesh : d12Mesh;
+          const activeBody = isD7 ? d7Body : d12Body;
+          const activeData = isD7 ? d7Data : d12Data;
+          const activeScale = isD7 ? MELODY_D7_SCALE : MELODY_D12_SCALE;
+
+          activeMesh.position.set(
+            activeBody.position.x,
+            Math.max(activeData.inradius * activeScale, activeBody.position.y),
+            activeBody.position.z
           );
-          d12Mesh.quaternion.set(
-            d12Body.quaternion.x,
-            d12Body.quaternion.y,
-            d12Body.quaternion.z,
-            d12Body.quaternion.w
+          activeMesh.quaternion.set(
+            activeBody.quaternion.x,
+            activeBody.quaternion.y,
+            activeBody.quaternion.z,
+            activeBody.quaternion.w
           );
 
-          if (isBodyCalm(d12Body)) {
+          if (isBodyCalm(activeBody)) {
             rollState.calmFrames += 1;
           } else {
             rollState.calmFrames = 0;
@@ -822,65 +1045,88 @@ export const DiceStage = forwardRef<DiceStageHandle, DiceStageProps>(
             rollState.calmFrames >= 6 ||
             rollState.elapsed >= 0.92
           ) {
-            const allowed =
-              rollState.allowedFaces && rollState.allowedFaces.length > 0
-                ? rollState.allowedFaces
-                : undefined;
-
             if (finishMelodyRequested) {
-              // Immediately resolve remaining steps and snap final die
-              const { stepIndex, totalSteps } = rollState;
-              let lastFace = getTopFaceIndex(
-                d12Data.faceNormals,
-                d12Mesh.quaternion,
-                allowed
-              );
-              callbacksRef.current.onMelodyStepLanded(stepIndex, lastFace);
-              for (let s = stepIndex + 1; s < totalSteps; s++) {
-                if (allowed && allowed.length > 0) {
-                  const randIdx = Math.floor(Math.random() * allowed.length);
-                  lastFace = allowed[randIdx];
-                } else {
-                  lastFace = Math.floor(Math.random() * D12_PITCH_FACES.length);
+              const { stepIndex, totalSteps, dieType } = rollState;
+              if (dieType === 'd7') {
+                const face = getTopFaceIndex(d7Data.faceNormals, d7Mesh.quaternion);
+                let lastScaleIdx = D7_FACE_TO_SCALE_INDEX[face];
+                callbacksRef.current.onMelodyStepLanded(stepIndex, -1, lastScaleIdx);
+                for (let s = stepIndex + 1; s < totalSteps; s++) {
+                  lastScaleIdx = Math.floor(Math.random() * 7);
+                  callbacksRef.current.onMelodyStepLanded(s, -1, lastScaleIdx);
                 }
-                callbacksRef.current.onMelodyStepLanded(s, lastFace);
+                const lastFace = SCALE_INDEX_TO_D7_FACE[lastScaleIdx];
+                const finalQ = computeSettleQuaternion(
+                  d7Data.faceNormals[lastFace],
+                  d7Data.faceUpTangents[lastFace]
+                );
+                d7Mesh.position.set(0, d7Data.inradius * MELODY_D7_SCALE, 0);
+                d7Mesh.quaternion.copy(finalQ);
+                d7Body.position.set(0, d7Data.inradius * MELODY_D7_SCALE, 0);
+                d7Body.velocity.setZero();
+                d7Body.angularVelocity.setZero();
+              } else {
+                const allowed =
+                  rollState.allowedFaces && rollState.allowedFaces.length > 0
+                    ? rollState.allowedFaces
+                    : undefined;
+                let lastFace = getTopFaceIndex(
+                  d12Data.faceNormals,
+                  d12Mesh.quaternion,
+                  allowed
+                );
+                callbacksRef.current.onMelodyStepLanded(stepIndex, lastFace);
+                for (let s = stepIndex + 1; s < totalSteps; s++) {
+                  if (allowed && allowed.length > 0) {
+                    const randIdx = Math.floor(Math.random() * allowed.length);
+                    lastFace = allowed[randIdx];
+                  } else {
+                    lastFace = Math.floor(Math.random() * D12_PITCH_FACES.length);
+                  }
+                  callbacksRef.current.onMelodyStepLanded(s, lastFace);
+                }
+                const finalQ = computeSettleQuaternion(
+                  d12Data.faceNormals[lastFace],
+                  d12Data.faceUpTangents[lastFace]
+                );
+                d12Mesh.position.set(0, d12Data.inradius * MELODY_D12_SCALE, 0);
+                d12Mesh.quaternion.copy(finalQ);
+                d12Body.position.set(0, d12Data.inradius * MELODY_D12_SCALE, 0);
+                d12Body.velocity.setZero();
+                d12Body.angularVelocity.setZero();
               }
-              const finalQ = computeSettleQuaternion(
-                d12Data.faceNormals[lastFace],
-                d12Data.faceUpTangents[lastFace]
-              );
-              d12Mesh.position.set(0, d12Data.inradius * MELODY_D12_SCALE, 0);
-              d12Mesh.quaternion.copy(finalQ);
-              d12Body.position.set(0, d12Data.inradius * MELODY_D12_SCALE, 0);
-              d12Body.velocity.setZero();
-              d12Body.angularVelocity.setZero();
               rollState = { kind: 'idle' };
               callbacksRef.current.onRollingChange?.(false);
               callbacksRef.current.onMelodySequenceComplete();
             } else {
-              const face12 = getTopFaceIndex(
-                d12Data.faceNormals,
-                d12Mesh.quaternion,
+              const allowed =
+                !isD7 && rollState.allowedFaces && rollState.allowedFaces.length > 0
+                  ? rollState.allowedFaces
+                  : undefined;
+              const face = getTopFaceIndex(
+                activeData.faceNormals,
+                activeMesh.quaternion,
                 allowed
               );
               const endPos = new THREE.Vector3(
-                THREE.MathUtils.clamp(d12Mesh.position.x, -1.1, 1.1),
-                d12Data.inradius * MELODY_D12_SCALE,
-                THREE.MathUtils.clamp(d12Mesh.position.z, -1.1, 1.1)
+                THREE.MathUtils.clamp(activeMesh.position.x, -1.1, 1.1),
+                activeData.inradius * activeScale,
+                THREE.MathUtils.clamp(activeMesh.position.z, -1.1, 1.1)
               );
 
               rollState = {
                 kind: 'melody-settle',
+                dieType: rollState.dieType,
                 elapsed: 0,
                 duration: 0.16,
-                startPos12: d12Mesh.position.clone(),
-                endPos12: endPos,
-                startQ12: d12Mesh.quaternion.clone(),
-                endQ12: computeSettleQuaternion(
-                  d12Data.faceNormals[face12],
-                  d12Data.faceUpTangents[face12]
+                startPos: activeMesh.position.clone(),
+                endPos,
+                startQ: activeMesh.quaternion.clone(),
+                endQ: computeSettleQuaternion(
+                  activeData.faceNormals[face],
+                  activeData.faceUpTangents[face]
                 ),
-                face12,
+                face,
                 stepIndex: rollState.stepIndex,
                 totalSteps: rollState.totalSteps,
                 allowedFaces: rollState.allowedFaces,
@@ -889,19 +1135,31 @@ export const DiceStage = forwardRef<DiceStageHandle, DiceStageProps>(
             }
           }
         } else if (rollState.kind === 'melody-settle') {
+          const isD7 = rollState.dieType === 'd7';
+          const activeMesh = isD7 ? d7Mesh : d12Mesh;
+
           if (rollState.pauseAfter === 0) {
             rollState.elapsed += dt;
             const t = Math.min(1, rollState.elapsed / rollState.duration);
             const eased = 1 - Math.pow(1 - t, 3);
 
-            d12Mesh.position.lerpVectors(rollState.startPos12, rollState.endPos12, eased);
-            d12Mesh.quaternion.slerpQuaternions(rollState.startQ12, rollState.endQ12, eased);
+            activeMesh.position.lerpVectors(rollState.startPos, rollState.endPos, eased);
+            activeMesh.quaternion.slerpQuaternions(rollState.startQ, rollState.endQ, eased);
 
             if (t >= 1) {
-              callbacksRef.current.onMelodyStepLanded(
-                rollState.stepIndex,
-                rollState.face12
-              );
+              if (isD7) {
+                const scaleIdx = D7_FACE_TO_SCALE_INDEX[rollState.face];
+                callbacksRef.current.onMelodyStepLanded(
+                  rollState.stepIndex,
+                  -1,
+                  scaleIdx
+                );
+              } else {
+                callbacksRef.current.onMelodyStepLanded(
+                  rollState.stepIndex,
+                  rollState.face
+                );
+              }
               if (rollState.stepIndex + 1 >= rollState.totalSteps) {
                 rollState = { kind: 'idle' };
                 callbacksRef.current.onRollingChange?.(false);
@@ -914,23 +1172,39 @@ export const DiceStage = forwardRef<DiceStageHandle, DiceStageProps>(
             rollState.pauseAfter += dt;
             if (finishMelodyRequested || rollState.pauseAfter >= 0.2) {
               if (finishMelodyRequested) {
-                const { stepIndex, totalSteps, allowedFaces } = rollState;
-                let lastFace = rollState.face12;
-                for (let s = stepIndex + 1; s < totalSteps; s++) {
-                  if (allowedFaces && allowedFaces.length > 0) {
-                    const randIdx = Math.floor(Math.random() * allowedFaces.length);
-                    lastFace = allowedFaces[randIdx];
-                  } else {
-                    lastFace = Math.floor(Math.random() * D12_PITCH_FACES.length);
+                const { stepIndex, totalSteps, dieType } = rollState;
+                if (dieType === 'd7') {
+                  let lastScaleIdx = D7_FACE_TO_SCALE_INDEX[rollState.face];
+                  for (let s = stepIndex + 1; s < totalSteps; s++) {
+                    lastScaleIdx = Math.floor(Math.random() * 7);
+                    callbacksRef.current.onMelodyStepLanded(s, -1, lastScaleIdx);
                   }
-                  callbacksRef.current.onMelodyStepLanded(s, lastFace);
+                  const lastFace = SCALE_INDEX_TO_D7_FACE[lastScaleIdx];
+                  const finalQ = computeSettleQuaternion(
+                    d7Data.faceNormals[lastFace],
+                    d7Data.faceUpTangents[lastFace]
+                  );
+                  d7Mesh.position.set(0, d7Data.inradius * MELODY_D7_SCALE, 0);
+                  d7Mesh.quaternion.copy(finalQ);
+                } else {
+                  const { allowedFaces } = rollState;
+                  let lastFace = rollState.face;
+                  for (let s = stepIndex + 1; s < totalSteps; s++) {
+                    if (allowedFaces && allowedFaces.length > 0) {
+                      const randIdx = Math.floor(Math.random() * allowedFaces.length);
+                      lastFace = allowedFaces[randIdx];
+                    } else {
+                      lastFace = Math.floor(Math.random() * D12_PITCH_FACES.length);
+                    }
+                    callbacksRef.current.onMelodyStepLanded(s, lastFace);
+                  }
+                  const finalQ = computeSettleQuaternion(
+                    d12Data.faceNormals[lastFace],
+                    d12Data.faceUpTangents[lastFace]
+                  );
+                  d12Mesh.position.set(0, d12Data.inradius * MELODY_D12_SCALE, 0);
+                  d12Mesh.quaternion.copy(finalQ);
                 }
-                const finalQ = computeSettleQuaternion(
-                  d12Data.faceNormals[lastFace],
-                  d12Data.faceUpTangents[lastFace]
-                );
-                d12Mesh.position.set(0, d12Data.inradius * MELODY_D12_SCALE, 0);
-                d12Mesh.quaternion.copy(finalQ);
                 rollState = { kind: 'idle' };
                 callbacksRef.current.onRollingChange?.(false);
                 callbacksRef.current.onMelodySequenceComplete();
@@ -938,6 +1212,7 @@ export const DiceStage = forwardRef<DiceStageHandle, DiceStageProps>(
                 startSingleMelodyThrow(
                   rollState.stepIndex + 1,
                   rollState.totalSteps,
+                  rollState.dieType,
                   rollState.allowedFaces
                 );
               }
@@ -956,15 +1231,18 @@ export const DiceStage = forwardRef<DiceStageHandle, DiceStageProps>(
         renderer.domElement.removeEventListener('pointerup', onPointerUp);
         d12Body.removeEventListener('collide', handleCollide);
         d20Body.removeEventListener('collide', handleCollide);
+        d7Body.removeEventListener('collide', handleCollide);
 
         d12Data.geometry.dispose();
         d20Data.geometry.dispose();
+        d7Data.geometry.dispose();
         floorGeo.dispose();
         floorMat.dispose();
         walnutMat.dispose();
         brassMat.dispose();
         (d12Mesh.material as THREE.Material[]).forEach((m) => m.dispose());
         (d20Mesh.material as THREE.Material[]).forEach((m) => m.dispose());
+        (d7Mesh.material as THREE.Material[]).forEach((m) => m.dispose());
         renderer.dispose();
       };
     }, []);

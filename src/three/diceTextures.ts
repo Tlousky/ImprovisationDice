@@ -3,7 +3,7 @@ import type { DiceSkin, TrayTheme } from '../types/app';
 
 interface DieFaceTextureOptions {
   label: string;
-  shape: 'pentagon' | 'triangle';
+  shape: 'pentagon' | 'triangle' | 'rectangle';
   skin: DiceSkin;
   needsUnderline?: boolean;
 }
@@ -16,7 +16,7 @@ function drawFaceLabel(
   label: string,
   inkColor: string,
   accentColor: string,
-  shape: 'pentagon' | 'triangle',
+  shape: 'pentagon' | 'triangle' | 'rectangle',
   needsUnderline?: boolean
 ): void {
   const cx = 256;
@@ -136,10 +136,19 @@ export function getDieFaceTexture(
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, size, size);
 
-  // Subtle recessed circular sheen on the face center
+  // Subtle recessed border sheen on the face center
   ctx.save();
   ctx.beginPath();
-  ctx.arc(256, 256, options.shape === 'triangle' ? 98 : 132, 0, Math.PI * 2);
+  if (options.shape === 'rectangle') {
+    const c = ctx as CanvasRenderingContext2D & { roundRect?: (...args: any[]) => void };
+    if (typeof c.roundRect === 'function') {
+      c.roundRect(54, 54, size - 108, size - 108, 28);
+    } else {
+      c.rect(54, 54, size - 108, size - 108);
+    }
+  } else {
+    ctx.arc(256, 256, options.shape === 'triangle' ? 98 : 132, 0, Math.PI * 2);
+  }
   ctx.strokeStyle = isIvory
     ? 'rgba(182, 166, 136, 0.18)'
     : 'rgba(212, 175, 55, 0.14)';

@@ -1,6 +1,7 @@
 import * as CANNON from 'cannon-es';
 import { describe, expect, it } from 'vitest';
 import {
+  buildD7Geometry,
   buildD12Geometry,
   buildD20Geometry,
   computeSettleQuaternion,
@@ -55,6 +56,27 @@ describe('Polyhedral Dice Geometry & Physics Hulls', () => {
       expect(detected).toBe(f);
 
       const rotatedUp = d20.faceUpTangents[f].clone().applyQuaternion(quat);
+      expect(rotatedUp.z).toBeLessThan(-0.99);
+    }
+  });
+
+  it('builds a D7 with 7 distinct faces (2 pentagons + 5 side rectangles) and accurate top-face detection', () => {
+    const d7 = buildD7Geometry(0.95);
+
+    expect(d7.faceNormals).toHaveLength(7);
+    expect(d7.faceUpTangents).toHaveLength(7);
+    expect(d7.geometry.groups).toHaveLength(7);
+    expect(d7.convexShape.faces).toHaveLength(7);
+
+    for (let f = 0; f < 7; f++) {
+      const quat = computeSettleQuaternion(
+        d7.faceNormals[f],
+        d7.faceUpTangents[f]
+      );
+      const detected = getTopFaceIndex(d7.faceNormals, quat);
+      expect(detected).toBe(f);
+
+      const rotatedUp = d7.faceUpTangents[f].clone().applyQuaternion(quat);
       expect(rotatedUp.z).toBeLessThan(-0.99);
     }
   });

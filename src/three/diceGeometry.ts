@@ -349,3 +349,161 @@ export function computeSettleQuaternion(
   void SCREEN_UP;
   return quat.normalize();
 }
+
+/**
+ * Builds a 7-faced regular pentagonal prism die (D7) with 2 pentagonal bases
+ * (top & bottom) and 5 rectangular side faces.
+ * Inradius is uniform (~0.77), providing fair 3D physics settling and clean camera alignment.
+ */
+export function buildD7Geometry(radius = 0.95): PolyhedralDieGeometryData {
+  const H_half = radius * Math.cos(Math.PI / 5); // ~0.7686, equidistant inradius!
+  const numSides = 5;
+
+  const topVerts: THREE.Vector3[] = [];
+  const btmVerts: THREE.Vector3[] = [];
+
+  for (let k = 0; k < numSides; k++) {
+    const angle = (2 * Math.PI * k) / numSides - Math.PI / 2;
+    const x = radius * Math.cos(angle);
+    const z = radius * Math.sin(angle);
+    topVerts.push(new THREE.Vector3(x, H_half, z));
+    btmVerts.push(new THREE.Vector3(x, -H_half, z));
+  }
+
+  const positions: number[] = [];
+  const normals: number[] = [];
+  const uvs: number[] = [];
+
+  const faceNormals: THREE.Vector3[] = [];
+  const faceUpTangents: THREE.Vector3[] = [];
+  const faceCentroids: THREE.Vector3[] = [];
+  const polygons: THREE.Vector3[][] = [];
+
+  const geometry = new THREE.BufferGeometry();
+  let groupOffset = 0;
+
+  // Face 0: Top pentagon (y = +H_half)
+  const normTop = new THREE.Vector3(0, 1, 0);
+  const tanTop = new THREE.Vector3(0, 0, -1);
+  const centTop = new THREE.Vector3(0, H_half, 0);
+  faceNormals.push(normTop);
+  faceUpTangents.push(tanTop);
+  faceCentroids.push(centTop);
+  polygons.push([...topVerts]);
+
+  const uvScalePentagon = 0.42 / radius;
+  const toUvTop = (v: THREE.Vector3): [number, number] => [
+    0.5 + v.x * uvScalePentagon,
+    0.5 - v.z * uvScalePentagon,
+  ];
+
+  // Triangulate top pentagon fan (counter-clockwise viewed from outside +Y)
+  const topFan = [
+    [topVerts[0], topVerts[4], topVerts[3]],
+    [topVerts[0], topVerts[3], topVerts[2]],
+    [topVerts[0], topVerts[2], topVerts[1]],
+  ];
+  topFan.forEach((tri) => {
+    tri.forEach((v) => {
+      positions.push(v.x, v.y, v.z);
+      normals.push(normTop.x, normTop.y, normTop.z);
+      const uv = toUvTop(v);
+      uvs.push(uv[0], uv[1]);
+    });
+  });
+  geometry.addGroup(groupOffset, 9, 0);
+  groupOffset += 9;
+
+  // Face 1: Bottom pentagon (y = -H_half)
+  const normBtm = new THREE.Vector3(0, -1, 0);
+  const tanBtm = new THREE.Vector3(0, 0, 1);
+  const centBtm = new THREE.Vector3(0, -H_half, 0);
+  faceNormals.push(normBtm);
+  faceUpTangents.push(tanBtm);
+  faceCentroids.push(centBtm);
+  polygons.push([...btmVerts].reverse());
+
+  const toUvBtm = (v: THREE.Vector3): [number, number] => [
+    0.5 - v.x * uvScalePentagon,
+    0.5 + v.z * uvScalePentagon,
+  ];
+
+  // Triangulate bottom pentagon fan (counter-clockwise viewed from outside -Y)
+  const btmFan = [
+    [btmVerts[0], btmVerts[1], btmVerts[2]],
+    [btmVerts[0], btmVerts[2], btmVerts[3]],
+    [btmVerts[0], btmVerts[3], btmVerts[4]],
+  ];
+  btmFan.forEach((tri) => {
+    tri.forEach((v) => {
+      positions.push(v.x, v.y, v.z);
+      normals.push(normBtm.x, normBtm.y, normBtm.z);
+      const uv = toUvBtm(v);
+      uvs.push(uv[0], uv[1]);
+    });
+  });
+  geometry.addGroup(groupOffset, 9, 1);
+  groupOffset += 9;
+
+  // Faces 2..6: The 5 side rectangular faces
+  for (let k = 0; k < numSides; k++) {
+    const next = (k + 1) % numSides;
+    const v0 = topVerts[k];
+    const v1 = topVerts[next];
+    const b1 = btmVerts[next];
+    const b0 = btmVerts[k];
+
+    const centSide = new THREE.Vector3()
+      .add(v0)
+      .add(v1)
+      .add(b1)
+      .add(b0)
+      .multiplyScalar(0.25);
+    const normSide = new THREE.Vector3(centSide.x, 0, centSide.z).normalize();
+    const tanSide = new THREE.Vector3(0, 1, 0);
+
+    faceNormals.push(normSide);
+    faceUpTangents.push(tanSide);
+    faceCentroids.push(centSide);
+    polygons.push([v0, b0, b1, v1]);
+
+    const quadTris = [
+      { v: v0, uv: [0.12, 0.88] },
+      { v: b0, uv: [0.12, 0.12] },
+      { v: b1, uv: [0.88, 0.12] },
+      { v: v0, uv: [0.12, 0.88] },
+      { v: b1, uv: [0.88, 0.12] },
+      { v: v1, uv: [0.88, 0.88] },
+    ];
+
+    quadTris.forEach((pt) => {
+      positions.push(pt.v.x, pt.v.y, pt.v.z);
+      normals.push(normSide.x, normSide.y, normSide.z);
+      uvs.push(pt.uv[0], pt.uv[1]);
+    });
+
+    const faceIdx = 2 + k;
+    geometry.addGroup(groupOffset, 6, faceIdx);
+    groupOffset += 6;
+  }
+
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  geometry.computeBoundingSphere();
+
+  const inradius = H_half;
+  const convexShape = buildConvexShape(polygons, faceNormals);
+
+  return {
+    geometry,
+    faceNormals,
+    faceUpTangents,
+    faceCentroids,
+    inradius,
+    convexShape,
+  };
+}
+
+export const D7_FACE_TO_SCALE_INDEX: number[] = [0, 6, 1, 2, 3, 4, 5];
+export const SCALE_INDEX_TO_D7_FACE: number[] = [0, 2, 3, 4, 5, 6, 1];

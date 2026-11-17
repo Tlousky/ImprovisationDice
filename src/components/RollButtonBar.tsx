@@ -6,6 +6,7 @@ interface RollButtonBarProps {
   noteCount: number;
   isRolling: boolean;
   melodyProgressIndex: number;
+  melodyDieSides?: 7 | 12;
   onRoll: () => void;
   onFinishMelodyEarly: () => void;
 }
@@ -15,6 +16,7 @@ export function RollButtonBar({
   noteCount,
   isRolling,
   melodyProgressIndex,
+  melodyDieSides = 12,
   onRoll,
   onFinishMelodyEarly,
 }: RollButtonBarProps) {
@@ -30,6 +32,7 @@ export function RollButtonBar({
     onRoll();
   };
 
+  const dieBadge = melodyDieSides === 7 ? 'D7' : 'D12';
   const buttonLabel =
     mode === 'chord'
       ? isRolling
@@ -37,7 +40,7 @@ export function RollButtonBar({
         : 'ROLL DICE'
       : isRolling
         ? `ROLLING ${Math.min(noteCount, melodyProgressIndex + 1)} / ${noteCount}`
-        : `ROLL ${noteCount} NOTES`;
+        : `ROLL ${noteCount} NOTES (${dieBadge})`;
 
   return (
     <div className="roll-bar">

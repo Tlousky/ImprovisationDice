@@ -217,7 +217,7 @@ export function MelodyResultPanel({
       {!melodyMode.isChromatic && (
         <div className="mode-notes-strip" aria-label="Mode scale notes">
           <span className="mode-notes-badge">
-            {melodyMode.tonic} {melodyMode.modeType}:
+            D7 · {melodyMode.tonic} {melodyMode.modeType}:
           </span>
           <span className="mode-notes-list">
             {melodyMode.scalePitches.join(' · ')}
